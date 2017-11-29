@@ -103,9 +103,10 @@ RajaDofQuadMaps& RajaDofQuadMaps::Get(const FiniteElement& trialFE,
 
 // ***************************************************************************
 RajaDofQuadMaps& RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
-    const FiniteElement& testFE,
-    const IntegrationRule& ir,
-    const bool transpose) {
+                                                const FiniteElement& testFE,
+                                                const IntegrationRule& ir,
+                                                const bool transpose) {
+  //printf("\n\033[33m[GetTensorMaps]\033[m");
   const TensorBasisElement& trialTFE =
     dynamic_cast<const TensorBasisElement&>(trialFE);
   const TensorBasisElement& testTFE =
@@ -121,6 +122,7 @@ RajaDofQuadMaps& RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
   // If we've already made the dof-quad maps, reuse them
   RajaDofQuadMaps& maps = AllDofQuadMaps[hash];
   if (!maps.hash.size()) {
+    //printf("\n\033[33m[GetTensorMaps] DOING it!\033[m");
     maps.hash = hash;
     RajaDofQuadMaps trialMaps = GetD2QTensorMaps(trialFE, ir);
     RajaDofQuadMaps testMaps  = GetD2QTensorMaps(testFE, ir, true);
@@ -137,6 +139,7 @@ RajaDofQuadMaps& RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
 RajaDofQuadMaps RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
     const IntegrationRule& ir,
     const bool transpose) {
+  //printf("\n\033[33m[GetD2QTensorMaps]\033[m");
   const TensorBasisElement& tfe = dynamic_cast<const TensorBasisElement&>(fe);
   const Poly_1D::Basis& basis = tfe.GetBasis1D();
   const int order = fe.GetOrder();
@@ -148,9 +151,10 @@ RajaDofQuadMaps RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
   const int quadPoints3D = quadPoints2D*quadPoints;
   const int quadPointsND = ((dims == 1) ? quadPoints :
                             ((dims == 2) ? quadPoints2D : quadPoints3D));
-  RajaDofQuadMaps maps;
-  maps.dofToQuad.allocate(quadPoints, dofs,1,1,transpose);
-  maps.dofToQuadD.allocate(quadPoints, dofs,1,1,transpose);
+  RajaDofQuadMaps maps; 
+  //printf("\n\033[33m[GetD2QTensorMaps] quadPoints=%d, dofs=%d\033[m",quadPoints,dofs);
+  maps.dofToQuad.allocate(quadPoints,dofs,1,1,transpose);
+  maps.dofToQuadD.allocate(quadPoints,dofs,1,1,transpose);
   double* quadWeights1DData = NULL;
   if (transpose) {
     // Initialize quad weights only for transpose
@@ -191,16 +195,17 @@ RajaDofQuadMaps RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
 
 // ***************************************************************************
 RajaDofQuadMaps& RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& fe,
-    const IntegrationRule& ir,
-    const bool transpose) {
+                                                 const IntegrationRule& ir,
+                                                 const bool transpose) {
   return GetSimplexMaps(fe, fe, ir, transpose);
 }
 
 // ***************************************************************************
 RajaDofQuadMaps& RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
-    const FiniteElement& testFE,
-    const IntegrationRule& ir,
-    const bool transpose) {
+                                                 const FiniteElement& testFE,
+                                                 const IntegrationRule& ir,
+                                                 const bool transpose) {
+  //printf("\n\033[33m[GetSimplexMaps]\033[m");
   std::stringstream ss;
   ss << "Simplex"
      << "O1:" << trialFE.GetOrder()
@@ -210,6 +215,7 @@ RajaDofQuadMaps& RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
   // If we've already made the dof-quad maps, reuse them
   RajaDofQuadMaps& maps = AllDofQuadMaps[hash];
   if (!maps.hash.size()) {
+    //printf("\n\033[33m[GetSimplexMaps] DOING it!\033[m");
     maps.hash = hash;
     RajaDofQuadMaps trialMaps = GetD2QSimplexMaps(trialFE, ir);
     RajaDofQuadMaps testMaps  = GetD2QSimplexMaps(testFE, ir, true);
@@ -224,12 +230,14 @@ RajaDofQuadMaps& RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
 
 // ***************************************************************************
 RajaDofQuadMaps RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
-    const IntegrationRule& ir,
-    const bool transpose) {
+                                                   const IntegrationRule& ir,
+                                                   const bool transpose) {
+  //printf("\n\033[33m[GetD2QSimplexMaps]\033[m");
   const int dims = fe.GetDim();
   const int numDofs = fe.GetDof();
   const int numQuad = ir.GetNPoints();
   RajaDofQuadMaps maps;
+  //printf("\n\033[33m[GetD2QSimplexMaps] numQuad=%d, numDofs=%d\033[m",numQuad,numDofs);
   // Initialize the dof -> quad mapping
   maps.dofToQuad.allocate(numQuad, numDofs,1,1,transpose);
   maps.dofToQuadD.allocate(dims, numQuad, numDofs,1,transpose);
@@ -316,6 +324,10 @@ void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
   const int dofs1D =trialFESpace->GetFE(0)->GetOrder() + 1;
   if (dims==1) { assert(false); }
   if (dims==2) {
+    //maps.dofToQuad.Print("dofToQuad");
+    //maps.dofToQuadD.Print("dofToQuadD");
+    //maps.quadToDof.Print("quadToDof");
+    //maps.quadToDofD.Print("quadToDofD");
     kMassMultAdd2D(dofs1D,
                    quad1D,
                    mesh->GetNE(),

@@ -119,12 +119,13 @@ public:
    LagrangianHydroOperator(int size, RajaFiniteElementSpace &h1_fes,
                            RajaFiniteElementSpace &l2_fes,
                            Array<int> &essential_tdofs, RajaGridFunction &rho0,
+                           ParGridFunction &std_rho0,
                            int source_type_, double cfl_,
                            Coefficient *material_, bool visc, bool pa,
                            double cgt, int cgiter);
 
    // Solve for dx_dt, dv_dt and de_dt.
-   virtual void Mult(const RajaVector &S, RajaVector &dS_dt) const;
+  virtual void Mult(const RajaVector &S, RajaVector &dS_dt) const;
 
    // Calls UpdateQuadratureData to compute the new quad_data.dt_est.
    double GetTimeStepEstimate(const RajaVector &S) const;

@@ -28,8 +28,9 @@ void kInitQuadratureData(const double GAMMA,
                          double* __restrict rho0DetJ0w) {
   for (int el = 0; el < numElements; ++el) {
     for (int q = 0; q < NUM_QUAD; ++q) {
-      rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
-        rho0[ijN(q,el,NUM_QUAD)]*detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
+      const double DetJ0 =  detJ[ijN(q,el,NUM_QUAD)];
+      const double rho = rho0[ijN(q,el,NUM_QUAD)];
+        rho0DetJ0w[ijN(q,el,NUM_QUAD)] = rho * DetJ0 * quadWeights[q];
     }
   }
 }

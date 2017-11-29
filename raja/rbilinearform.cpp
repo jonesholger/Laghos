@@ -110,13 +110,18 @@ void RajaBilinearForm::InitRHS(const Array<int>& constraintList,
 
 // ***************************************************************************
 void RajaBilinearForm::Mult(const RajaVector& x, RajaVector& y) const {
+  //x.Print("[RajaBilinearForm::Mult] x");
   trialFes->GlobalToLocal(x, localX);
+  //localX=1.0;
+  //localX.Print("[RajaBilinearForm::Mult] localX");
   localY = 0;
   const int integratorCount = (int) integrators.size();
   for (int i = 0; i < integratorCount; ++i) {
+    //printf("integrators->MultAdd");
     integrators[i]->MultAdd(localX, localY);
   }
   testFes->LocalToGlobal(localY, y);
+  //y.Print("[RajaBilinearForm::Mult] y");
 }
 
 // ***************************************************************************
@@ -155,7 +160,10 @@ void RajaConstrainedOperator::Setup(Operator* A_,
   own_A = own_A_;
   constraintIndices = constraintList_.Size();
   if (constraintIndices) {
+    #warning need to copy here
     constraintList.allocate(constraintIndices);
+    for (unsigned int i = 0; i < constraintList.size(); i++)
+      constraintList[i]=constraintList_[i];
   }
   z.SetSize(height);
   w.SetSize(height);
@@ -164,8 +172,19 @@ void RajaConstrainedOperator::Setup(Operator* A_,
 void RajaConstrainedOperator::EliminateRHS(const RajaVector& x,
                                            RajaVector& b) const {
   w = 0.0;
-  A->Mult(w, z);
+  //printf("\n[EliminateRHS] constraint_list.Size()=%d",constraintList.size());
+  for (unsigned int i = 0; i < constraintList.size(); i++)
+   {
+     //printf("\n[EliminateRHS] constraintList[%d]=%d",i,constraintList[i]);
+     //printf("\n[EliminateRHS] w.size=%d",i,w.Size());
+      w[constraintList[i]] = x[constraintList[i]];
+   }
+   A->Mult(w, z);
   b -= z;
+   for (unsigned int i = 0; i < constraintList.size(); i++)
+   {
+      b[constraintList[i]] = x[constraintList[i]];
+   }
 }
 
 void RajaConstrainedOperator::Mult(const RajaVector& x, RajaVector& y) const {
@@ -174,7 +193,15 @@ void RajaConstrainedOperator::Mult(const RajaVector& x, RajaVector& y) const {
     return;
   }
   z = x;
+  for (unsigned int i = 0; i < constraintList.size(); i++)
+  {
+    z[constraintList[i]] = 0.0;
+  }
   A->Mult(z, y);
+  for (unsigned int i = 0; i < constraintList.size(); i++)
+  {
+    y[constraintList[i]] = x[constraintList[i]];
+  }
 }
 
 } // mfem

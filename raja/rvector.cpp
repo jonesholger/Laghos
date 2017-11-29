@@ -44,9 +44,10 @@ RajaVector::operator Vector() { return Vector(data,size); }
 RajaVector::operator Vector() const { return Vector(data,size); }
 
 // ***************************************************************************
-void RajaVector::Print(std::ostream& out, int width) const {
+void RajaVector::Print(const char *title, std::ostream& out, int width) const {
+  printf("\n\033[32m[%s]\033",title);
   for (size_t i=0; i<size; i+=1) {
-    printf("\n\t[%ld] %.15e",i,data[i]);
+    printf("\n\t\033[32m[%ld]\033[m %.16e",i,data[i]);
   }
   //Vector(data,size).Print(out, width);
 }
@@ -87,6 +88,13 @@ RajaVector& RajaVector::operator-=(const RajaVector& v) {
 // ***************************************************************************
 RajaVector& RajaVector::operator+=(const RajaVector& v) {
   vector_vec_add(size, data, v);
+  return *this;
+}
+
+// ***************************************************************************
+RajaVector& RajaVector::operator*=(const double d) {
+  for (size_t i=0; i<size; i+=1)
+    data[i]*=d;
   return *this;
 }
 

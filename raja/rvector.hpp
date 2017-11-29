@@ -36,7 +36,7 @@ class RajaVector {
   inline double* ptr() const { return data;}
   inline operator double* () { return data; }
   inline operator const double* () const { return data; }
-  void Print(std::ostream& = std::cout, int = 8) const;
+  void Print(const char* = "", std::ostream& = std::cout, int = 8) const;
   void SetSize(const size_t,const void* =NULL);
   inline size_t Size() const { return size; }
   inline size_t bytes() const { return size*sizeof(double); }
@@ -45,6 +45,7 @@ class RajaVector {
   RajaVector& operator = (double value);
   RajaVector& operator -= (const RajaVector& v);
   RajaVector& operator += (const RajaVector& v);
+  RajaVector& operator*=(const double d);
   RajaVector& Add(const double a, const RajaVector& Va);
   void Neg();
   RajaVectorRef GetRange(const size_t, const size_t) const;

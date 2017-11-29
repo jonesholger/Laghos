@@ -27,7 +27,9 @@ void RajaGridFunction::ToQuad(const IntegrationRule& ir,
   quadValues.SetSize(numQuad * elements);
 
   if (dim==1) { assert(false); }
-  if (dim==2)
+  if (dim==2){
+    //maps.dofToQuad.Print("dofToQuad");
+    //fes.GetLocalToGlobalMap().Print("GetLocalToGlobalMap");
     kGridFuncToQuad2D(vdim,
                       dofs1D,
                       quad1D,
@@ -36,6 +38,7 @@ void RajaGridFunction::ToQuad(const IntegrationRule& ir,
                       fes.GetLocalToGlobalMap(),
                       ptr(),
                       quadValues);
+  }
   if (dim==3)
     kGridFuncToQuad3D(vdim,
                       dofs1D,

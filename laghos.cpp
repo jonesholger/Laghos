@@ -275,11 +275,14 @@ int main(int argc, char *argv[])
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
    pmesh->SetNodalGridFunction(&x_gf);
+//#warning x_gf   x_gf *= 1.12345678912345678;
+   //x_gf.Print("x_gf");
    o_x_gf = x_gf;
-
+ 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
+//   #warning v_gf   v_gf *= 1.12345678912345678;
    o_v_gf = v_gf;
 
    // Initialize density and specific internal energy values. We interpolate in
@@ -294,9 +297,21 @@ int main(int argc, char *argv[])
    RajaFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
    l2_rho.ProjectCoefficient(rho_coeff);
+   //l2_rho.Print("[laghos] l2_rho");
    rho.ProjectGridFunction(l2_rho);
+//#warning rho = 1.0
+//   rho = 1.0;
+   //rho.Print("[laghos] rho");
+//   for(int i=1;i<=rho.Size();i++)rho[i-1]=1.12345678912345678*(double)i;
+
    RajaGridFunction o_rho(L2FESpace);
-   o_rho = rho;
+#warning rho for master vs occa vs 1.0
+   o_rho = rho; // master
+   //o_rho.Print("[laghos] o_rho");
+   //o_rho = 1.0;
+   //o_rho = l2_rho; // occa
+//   for(unsigned int i=1;i<=o_rho.Size();i++)o_rho[i-1]=1.12345678912345678*(double)i;
+   
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -327,7 +342,7 @@ int main(int argc, char *argv[])
    }
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, o_rho, source, cfl, material_pcf,
+                                ess_tdofs, o_rho, rho,source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter);
 
    socketstream vis_rho, vis_v, vis_e;
@@ -398,6 +413,7 @@ int main(int argc, char *argv[])
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       ode_solver->Step(S, t, dt);
+      //S.Print("Steped S");//exit(0);
       steps++;
 
       // Adaptive time step control.

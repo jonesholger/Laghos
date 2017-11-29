@@ -45,6 +45,9 @@ void kMassMultAdd2D(const int NUM_DOFS_1D,
                     const double* oper,
                     const double* solIn,
                     double* __restrict solOut) {
+  //printf("\n\033[32m[kMassMultAdd2D]\033[m numElements=%d",numElements);
+  //printf("\n\033[32m[kMassMultAdd2D]\033[m NUM_DOFS_1D=%d",NUM_DOFS_1D);
+  //printf("\n\033[32m[kMassMultAdd2D]\033[m NUM_QUAD_1D=%d",NUM_QUAD_1D);
   for (int e = 0; e < numElements; ++e) {
     double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
     for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {

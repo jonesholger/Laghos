@@ -58,7 +58,9 @@ void kGridFuncToQuad2D(const int NUM_VDIM,
                        const int* l2gMap,
                        const double* gf,
                        double* __restrict out) {
+  //printf("\n\t[kGridFuncToQuad2D] vdim=%d",NUM_VDIM);
   for (int e = 0; e < numElements; ++e) {
+    //printf("\n\ti=%d",e);
     double out_xy[NUM_VDIM][NUM_QUAD_1D][NUM_QUAD_1D];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -99,6 +101,7 @@ void kGridFuncToQuad2D(const int NUM_VDIM,
     for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
       for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
         for (int v = 0; v < NUM_VDIM; ++v) {
+          //printf("\n\t\033[32m[%d]\033[m %.16e",qy*NUM_QUAD_1D+qx, out_xy[v][qy][qx]);
           out[_ijklNM(v, qx, qy, e,NUM_QUAD_1D,numElements)] = out_xy[v][qy][qx];
         }
       }

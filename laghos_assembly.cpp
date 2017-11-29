@@ -99,13 +99,16 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 // *************************************************************************
 void RajaMassOperator::Mult(const RajaVector &x, RajaVector &y) const
 {
+  //printf("\nRajaMassOperator::Mult");
    distX = x;
    if (ess_tdofs_count)
    {
-      distX.SetSubVector(ess_tdofs->GetData(), 0.0, ess_tdofs_count);
+     //printf("\n[RajaMassOperator::Mult] ess_tdofs_count=%d",ess_tdofs_count);     
+     distX.SetSubVector(ess_tdofs->GetData(), 0.0, ess_tdofs_count);
    }
    
    massOperator->Mult(distX, y);
+   //y.Print("y");
    
    if (ess_tdofs_count)
    {
@@ -150,6 +153,7 @@ void RajaForceOperator::Setup()
 // *************************************************************************
 void RajaForceOperator::Mult(const RajaVector &vecL2, RajaVector &vecH1) const
 {
+  //vecL2.Print("[RajaForceOperator::Mult] vecL2");
    l2fes.GlobalToLocal(vecL2, gVecL2);
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
@@ -159,7 +163,10 @@ void RajaForceOperator::Mult(const RajaVector &vecL2, RajaVector &vecH1) const
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    if (dim==1) { assert(false); }
-   if (dim==2)
+   if (dim==2){
+     //gVecL2.Print("[RajaForceOperator::Mult] gVecL2");
+     //l2D2Q.dofToQuad.Print("[RajaForceOperator::Mult] dofToQuad");
+     //quad_data->stressJinvT.Print("[RajaForceOperator::Mult] stressJinvT");
       kForceMult2D(dim,
                    NUM_DOFS_1D,
                    NUM_QUAD_1D,
@@ -173,6 +180,8 @@ void RajaForceOperator::Mult(const RajaVector &vecL2, RajaVector &vecH1) const
                    quad_data->stressJinvT,
                    gVecL2,
                    gVecH1);
+      //gVecH1.Print("[RajaForceOperator::Mult] gVecH1");
+   }
    if (dim==3)
       kForceMult3D(dim,
                    NUM_DOFS_1D,
@@ -189,6 +198,7 @@ void RajaForceOperator::Mult(const RajaVector &vecL2, RajaVector &vecH1) const
                    gVecL2,
                    gVecH1);
    h1fes.LocalToGlobal(gVecH1, vecH1);
+   //vecH1.Print("[RajaForceOperator::Mult] vecH1");
 }
 
 // *************************************************************************
