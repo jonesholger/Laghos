@@ -67,6 +67,7 @@ void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
+   //dbgIni(argv[0]);dbg();
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
@@ -91,6 +92,7 @@ int main(int argc, char *argv[])
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
+   bool cuda = false;
    const char *basename = "results/Laghos";
 
    OptionsParser args(argc, argv);
@@ -131,6 +133,8 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
+   args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
+                  "Enable or disable CUDA kernels.");
    args.Parse();
    if (!args.Good())
    {
@@ -138,7 +142,10 @@ int main(int argc, char *argv[])
       return 1;
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
-
+   
+   // Setting the info CUDA kernels are requested
+   is_managed=cuda;
+   
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);

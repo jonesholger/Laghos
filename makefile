@@ -71,8 +71,8 @@ TEST_MK = $(MFEM_DIR)/share/mfem/test.mk
 
 # Use two relative paths to MFEM: first one for compilation in '.' and second
 # one for compilation in 'lib'.
-MFEM_DIR1 := $(MFEM_DIR)
-MFEM_DIR2 := $(realpath $(MFEM_DIR))
+MFEM_DIR1 := $(MFEM_DIR)/build/mfem/lib #$(MFEM_DIR)
+MFEM_DIR2 := $(MFEM_DIR)/build/mfem/include/mfem #$(realpath $(MFEM_DIR))
 
 # Use the compiler used by MFEM. Get the compiler and the options for compiling
 # and linking from MFEM's config.mk. (Skip this if the target does not require
@@ -88,8 +88,6 @@ endif
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
-CXXFLAGS += -std=c++11 #-fopenmp #-Wall 
-#-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
 # MFEM config does not define C compiler
 CC     = gcc
@@ -109,18 +107,25 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
+CXXFLAGS += -std=c++11
+# -DRAJA_USE_SIMPOOL
+#-fopenmp #-Wall 
+#CXXFLAGS = -g -O1 -fno-inline -fno-omit-frame-pointer
+#-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
+
 #################
 # CUDA compiler #
-# comment these lines to use MFEM's compiler
+# use 'make nvidia'
 #################
 ifeq ($(LAGHOS_NVCC),YES)
 	CXX = /usr/local/cuda/bin/nvcc
-	CXXFLAGS = -std=c++11 -O2 -g -x=cu -m64 \
+	CXXFLAGS = -DUSE_CUDA \
+		-std=c++11 -O3 -g -G -x=cu -m64 \
 		-Xcompiler -fopenmp \
 		--restrict --expt-extended-lambda \
 		--gpu-architecture sm_60 \
-		-DUSE_RAJA -DUSE_CUDA \
 		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
+#		-DRAJA_USE_SIMPOOL
 endif
 
 #######################
@@ -128,14 +133,18 @@ endif
 #######################
 MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include 
 
+#DBG_INC = -I/home/camier1/home/dbg
+#DBG_LIB = -Wl,-rpath -Wl,/home/camier1/home/dbg -L/home/camier1/home/dbg -ldbg 
+#BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
+
 CUDA_INC = -I/usr/local/cuda/include
 CUDA_LIBS = /usr/local/cuda/lib64/libcudart_static.a
 
 RAJA_INC = -I$(home)/usr/local/raja/0.4.1/include
 RAJA_LIBS = $(home)/usr/local/raja/0.4.1/lib/libRAJA.a
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC)
-LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl 
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
+LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -202,7 +211,7 @@ laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
 
-debug:
+dbg debug:
 	$(MAKE) "LAGHOS_DEBUG=YES"
 
 nv nvcc:

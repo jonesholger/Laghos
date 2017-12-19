@@ -13,8 +13,8 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef MFEM_RAJA_BILININTEG
-#define MFEM_RAJA_BILININTEG
+#ifndef LAGHOS_RAJA_BILININTEG
+#define LAGHOS_RAJA_BILININTEG
 
 namespace mfem {
 
@@ -42,7 +42,7 @@ class RajaDofQuadMaps {
   RajaArray<double> quadWeights;
 public:
   static void delDofQuadMaps(){
-    dbg("\033[31m[~delDofQuadMaps]");
+    rdbg("\033[31m[~delDofQuadMaps]");
     for(std::map<std::string, RajaDofQuadMaps*>::iterator itr = AllDofQuadMaps.begin();
         itr != AllDofQuadMaps.end(); itr++) delete (itr->second);
     AllDofQuadMaps.clear();
@@ -124,4 +124,4 @@ class RajaMassIntegrator : public RajaIntegrator {
 
 } // mfem
 
-#endif
+#endif // LAGHOS_RAJA_BILININTEG

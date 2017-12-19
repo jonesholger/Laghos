@@ -13,12 +13,11 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.hpp"
+#include "raja.hpp"
+
 void vector_axpy(const int N,
                  const double alpha,
                  double* __restrict v0,
                  const double* __restrict v1) {
-  forall(N,[=]_device_(int i){
-    v0[i] += alpha * v1[i];
-    });
+  forall(i,N,v0[i] += alpha * v1[i];);
 }

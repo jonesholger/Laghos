@@ -13,7 +13,7 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.hpp"
+#include "raja.hpp"
 
 // *****************************************************************************
 void rGlobalToLocal(const int NUM_VDIM,
@@ -24,9 +24,9 @@ void rGlobalToLocal(const int NUM_VDIM,
                     const int* __restrict indices,
                     const double* __restrict globalX,
                     double* __restrict localX) {
-  forall(globalEntries,[=]_device_(int i) {
+  forall(i,globalEntries,{
       const int offset = offsets[i];
-      const int nextOffset = offsets[i + 1];
+      const int nextOffset = offsets[i+1];
       for (int v = 0; v < NUM_VDIM; ++v) {
         const int g_offset = ijNMt(v,i,NUM_VDIM,globalEntries,VDIM_ORDERING);
         const double dofValue = globalX[g_offset];

@@ -13,10 +13,19 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "raja.hpp"
+#ifndef LAGHOS_RAJA_DBG
+#define LAGHOS_RAJA_DBG
 
-void vector_op_eq(const int N,
-                  const double c0,
-                  double* __restrict v0) {
-  forall(i,N,v0[i] = c0;);
+// DBG *************************************************************************
+//#undef LAGHOS_DEBUG
+inline void rdbg(const char *format,...){
+#ifdef LAGHOS_DEBUG
+  va_list args;
+  va_start(args, format);
+  vfprintf(stdout,format,args);
+  fflush(stdout);
+  va_end(args);
+#endif // LAGHOS_DEBUG
 }
+
+#endif // LAGHOS_RAJA_DBG
