@@ -59,9 +59,11 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = ../mfem-raja
-CONFIG_MK = $(MFEM_DIR)/config/config.mk
-TEST_MK = $(MFEM_DIR)/config/test.mk
+#MFEM_DIR = ../mfem-raja
+MFEM_DIR = ../MFEM-github/blueos_build/mfem
+CONFIG_MK = $(MFEM_DIR)/share/mfem/config.mk
+TEST_MK = $(MFEM_DIR)/share/mfem/test.mk
+#TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
 # MFEM_DIR = ../mfem/mfem
 # CONFIG_MK = $(MFEM_DIR)/config.mk
