@@ -161,6 +161,7 @@ int main(int argc, char *argv[])
       }
    }
 
+
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize();
@@ -333,8 +334,6 @@ int main(int argc, char *argv[])
       default: MFEM_ABORT("Wrong problem specification!");
    }
 
-   std::cerr << "p_assembly " << p_assembly << std::endl;
-
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, o_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter);
@@ -391,7 +390,7 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    RajaVector S_old(S);
-   for (int ti = 1; ti <= 10 && !last_step; ti++)
+   for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
       {

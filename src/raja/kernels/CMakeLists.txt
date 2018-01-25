@@ -8,7 +8,8 @@ blt_add_library(
   rMapping.cpp
   rMassAssemble.cpp
   rMassMultAdd.cpp
-  rQuadratureData.cpp
+  rQDataInit.cpp
+  rQDataUpdate.cpp
   vector_axpy.cpp
   vector_clear_dofs.cpp
   vector_dot.cpp

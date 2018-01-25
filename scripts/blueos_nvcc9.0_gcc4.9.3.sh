@@ -22,13 +22,15 @@ module load cmake/3.7.2
 LAGHOS_DIR=$(git rev-parse --show-toplevel)
 
 cmake \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_BUILD_TYPE=Release \
   -C ${LAGHOS_DIR}/host-configs/blueos/nvcc_gcc_4_9_3.cmake \
   -DMFEM_USE_MPI=On \
   -DENABLE_OPENMP=On \
   -DENABLE_CUDA=On \
-  -DCUDA_TOOLKIT_ROOT_DIR=/usr/tcetmp/packages/cuda-9.0.176 \
+  -DENABLE_CUB=On \
+  -DCUDA_TOOLKIT_ROOT_DIR=/usr/tce/packages/cuda/cuda-9.0.176 \
   -DENABLE_ALL_WARNINGS=Off \
   -DCMAKE_INSTALL_PREFIX=../install_blueos_nvcc9.0_gcc4.9.3 \
+  -DCUB_DIR=$HOME/workspace/cub \
   "$@" \
   ${LAGHOS_DIR}

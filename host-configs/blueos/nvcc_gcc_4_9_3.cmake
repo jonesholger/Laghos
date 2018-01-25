@@ -15,9 +15,9 @@
 set(RAJA_COMPILER "RAJA_COMPILER_GNU" CACHE STRING "")
 
 #set(CMAKE_CXX_COMPILER "/usr/tcetmp/bin/g++" CACHE PATH "")
-set(CMAKE_CXX_COMPILER "/usr/tce/packages/spectrum-mpi/spectrum-mpi-2017.04.03-gcc-4.9.3/bin/mpicxx" CACHE PATH "")
-
-set(CMAKE_MPICXX_COMPILER "/usr/tce/packages/spectrum-mpi/spectrum-mpi-2017.04.03-gcc-4.9.3/bin/mpicxx" CACHE PATH "")
+# assume module load of a spectrum-mpi has been done
+set(CMAKE_CXX_COMPILER "mpicxx" CACHE PATH "")
+set(CMAKE_MPICXX_COMPILER "mpicxx" CACHE PATH "")
 
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -finline-functions" CACHE STRING "")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-Ofast -g -finline-functions" CACHE STRING "")
