@@ -22,7 +22,7 @@
 
 using namespace RAJA;
 
-#if 1
+#if 0
 
 
 double vector_dot(const int N,
@@ -44,17 +44,12 @@ double vector_dot(const int N,
 
 #endif
 
-#if 0
+#if 1
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-//ReduceDecl(Sum,dot,0.0);
-  ReduceSum<cuda_reduce<32>,double> dot(0.0);
-  //forall(i,N,dot += vec1[i] * vec2[i];);
-  forall<cuda_exec<32> >(0, N, [=] __device__(int i) {
-      dot += vec1[i] * vec2[i];
-      });    
-
+  ReduceDecl(Sum,dot,0.0);
+  forall(i,N,dot += vec1[i] * vec2[i];);
   return dot.get();
 }
 
