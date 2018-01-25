@@ -22,7 +22,7 @@ module load cmake/3.7.2
 LAGHOS_DIR=$(git rev-parse --show-toplevel)
 
 cmake \
-  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -C ${LAGHOS_DIR}/host-configs/blueos/nvcc_gcc_4_9_3.cmake \
   -DMFEM_USE_MPI=On \
   -DENABLE_OPENMP=On \

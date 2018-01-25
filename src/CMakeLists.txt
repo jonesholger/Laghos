@@ -1,5 +1,7 @@
 
 include_directories(.)
+include_directories(./raja)
+include_directories(./raja/kernels)
 
 add_subdirectory(raja)
 add_subdirectory(raja/kernels)

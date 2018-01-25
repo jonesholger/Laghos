@@ -6,7 +6,8 @@ blt_add_library(
   rInitGeom.cpp
   rLocalToGlobal.cpp
   rMapping.cpp
-  rMass.cpp
+  rMassAssemble.cpp
+  rMassMultAdd.cpp
   rQuadratureData.cpp
   vector_axpy.cpp
   vector_clear_dofs.cpp

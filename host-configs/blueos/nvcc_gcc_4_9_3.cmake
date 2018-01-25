@@ -24,8 +24,8 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-Ofast -g -finline-functions" CACHE STRING "
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g" CACHE STRING "")
 
 
-set(CUDA_COMMON_OPT_FLAGS -restrict; -arch sm_60; -std c++11; --expt-extended-lambda)
-set(CUDA_COMMON_DEBUG_FLAGS -restrict; -arch compute_30; -std c++11; --expt-extended-lambda)
+set(CUDA_COMMON_OPT_FLAGS -restrict; -arch sm_60; -std c++11; --expt-extended-lambda; -DUSE_RAJA; -DUSE_CUDA)
+set(CUDA_COMMON_DEBUG_FLAGS -restrict; -arch compute_30; -std c++11; --expt-extended-lambda; -DUSE_RAJA; -DUSE_CUDA )
 
 set(HOST_OPT_FLAGS -Xcompiler -O3 -Xcompiler -finline-functions -Xcompiler -fopenmp)
 

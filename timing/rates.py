@@ -3,12 +3,12 @@
 
 from pylab import *
 
-#rc('lines',  linestyle=None, marker='.', markersize=3)
+rc('lines',  linestyle=None, marker='.', markersize=3)
 rc('legend', fontsize=10)
 
-txt_pa  = loadtxt("timings_3d_pa");
-txt_fa  = loadtxt("timings_3d_fa");
-txt_oc  = loadtxt("timings_3d_occa");
+txt_pa  = loadtxt("rzmanta_timings_2d_cuda_pa");
+txt_fa  = loadtxt("rzmanta_timings_2d_cuda_fa");
+#txt_oc  = loadtxt("timings_3d_occa");
 
 def make_plot(column, label_prefix, line_style, txt, title=None, fig=None):
   cm=get_cmap('Set1') # 'Accent', 'Dark2', 'Set1', 'Set2', 'Set3'
@@ -29,10 +29,14 @@ def make_plot(column, label_prefix, line_style, txt, title=None, fig=None):
     for k in range(txt.shape[0]):
       o = txt[k,0]
       if o == p:
+        print(txt[k, 2])
+        print(txt[k, column])
         dofs.append(txt[k, 2])
         data.append(txt[k, 2]/txt[k, column])
        #data.append(1e6*txt[k, column])
     pm1 = p-1
+    print(dofs)
+    print(data)
     ax.plot(dofs, data, line_style, label=label_prefix + 'Q' + str(p) + 'Q' + str(p-1),
             color=colors[i], linewidth=2)
 
@@ -41,7 +45,7 @@ def make_plot(column, label_prefix, line_style, txt, title=None, fig=None):
   ax.legend(loc='best', prop={'size':18})
   ax.set_autoscaley_on(False)
   ax.set_autoscalex_on(False)
-  axis([10, 1e7, 1e4, 3e6])
+  axis([10, 4e7, 10, 4e7])
  #axis([10, 1e7, 1e5, 1e9])
   ax.set_xlabel('H1 DOFs', fontsize=18)
   ax.set_xscale('log', basex = 10)
@@ -53,11 +57,13 @@ def make_plot(column, label_prefix, line_style, txt, title=None, fig=None):
     ax.set_title(title, fontsize=18)
   return fig
 
-f1 = make_plot(8, 'PA: ', 'o-', txt_pa, title='Total Rate')
-f2 = make_plot(8, 'FA: ', 'o-', txt_fa, title='Total Rate')
-f3 = make_plot(8, 'OCCA: ', 'o-', txt_oc, title='Total Rate')
-#f1.savefig('laghos_3D_TT_PA.png', dpi=300, bbox_inches='tight')
-#f2.savefig('laghos_3D_TT_FA.png', dpi=300, bbox_inches='tight')
+fig1 = figure(figsize=(10,8))
+
+f1 = make_plot(8, 'PA: ', 'o-', txt_pa, title='Total Rate',fig=fig1)
+f2 = make_plot(8, 'FA: ', ':', txt_fa, title='Total Rate',fig=fig1)
+#f3 = make_plot(8, 'OCCA: ', 'o-', txt_oc, title='Total Rate')
+f1.savefig('laghos_2D_RAJA_cuda_PA.png', dpi=300, bbox_inches='tight')
+f2.savefig('laghos_2D_RAJA_cuda_FA.png', dpi=300, bbox_inches='tight')
 #f3.savefig('laghos_3D_TT_OC.png', dpi=300, bbox_inches='tight')
 
 show()

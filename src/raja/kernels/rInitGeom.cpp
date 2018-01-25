@@ -168,11 +168,15 @@ void rIniGeom(const int DIM,
               double* restrict invJ,
               double* restrict detJ) {
   const unsigned int id = (DIM<<16)|(NUM_DOFS<<8)|(NUM_QUAD);
-  assert(LOG2(DIM)<8);//printf("DIM:%d ",DIM);
-  assert(LOG2(NUM_DOFS)<8);//printf("NUM_DOFS:%d ",NUM_DOFS);
-  assert(LOG2(NUM_QUAD)<8);//printf("NUM_QUAD:%d ",NUM_QUAD);
+  assert(LOG2(DIM)<=8);
+  //printf("NUM_DOFS:%d ",NUM_DOFS);
+  assert(LOG2(NUM_DOFS)<=8);
+  //printf("NUM_QUAD:%d ",NUM_QUAD);
+  assert(LOG2(NUM_QUAD)<=8);
   static std::unordered_map<unsigned int, fIniGeom> call = {
     // 2D
+    {0x20404,&rIniGeom2D<4,4>},
+    
     {0x20410,&rIniGeom2D<4,16>},
     {0x20419,&rIniGeom2D<4,25>},
     {0x20424,&rIniGeom2D<4,36>},
@@ -205,9 +209,12 @@ void rIniGeom(const int DIM,
     {0x21951,&rIniGeom2D<25,81>},
     
     {0x22464,&rIniGeom2D<36,100>},
+    
+    {0x23190,&rIniGeom2D<49,144>},
 
     // 3D
     {0x31B40,&rIniGeom3D<27,64>},
+    {0x340D8,&rIniGeom3D<64,216>},
   };
   if (!call[id]){
     printf("\n[rIniGeom] id \033[33m0x%X\033[m ",id);
