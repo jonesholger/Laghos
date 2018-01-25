@@ -1,9 +1,11 @@
 [submodule "blt"]
 	path = blt
-	url = https://github.com/LLNL/blt.git
+	url = git@github.com:LLNL/blt.git
 [submodule "tpl/RAJA"]
 	path = tpl/RAJA
-	url = https://github.com/LLNL/RAJA.git
+  url = git@github.com:LLNL/RAJA.git
+  branch = feature/grid-stride-redux
 [submodule "MFEM"]
 	path = MFEM
-	url = https://github.com/CEED/MFEM.git
+  url = git@github.com:jonesholger/MFEM.git
+  branch = feature/mfem_submodule
