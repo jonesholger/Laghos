@@ -50,7 +50,8 @@
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
 
-
+#include <caliper/Annotation.h>
+#include <caliper/cali_macros.h>
 #include "laghos_solver.hpp"
 #include <memory>
 #include <iostream>

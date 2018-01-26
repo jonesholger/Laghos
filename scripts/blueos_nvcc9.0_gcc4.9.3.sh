@@ -26,6 +26,8 @@ cmake \
   -C ${LAGHOS_DIR}/host-configs/blueos/nvcc_gcc_4_9_3.cmake \
   -DMFEM_USE_MPI=On \
   -DENABLE_OPENMP=On \
+  -DENABLE_CALIPER=On \
+  -DWITH_NVPROF=On \
   -DENABLE_CUDA=On \
   -DENABLE_CUB=On \
   -DCUDA_TOOLKIT_ROOT_DIR=/usr/tce/packages/cuda/cuda-9.0.176 \

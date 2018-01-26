@@ -39,6 +39,7 @@ set(BLT_CXX_STANDARD 11)
 set(ENABLE_TESTS Off CACHE Bool "")
 set(ENABLE_EXAMPLES Off CACHE Bool "")
 set(ENABLE_DOCUMENTATION Off CACHE Bool "")
+set(ENABLE_CALIPER Off CACHE Bool "")
 
 set(ENABLE_TBB Off CACHE Bool "")
 
@@ -49,9 +50,18 @@ set(RAJA_RANGE_MIN_LENGTH 32)
 set(RAJA_DATA_ALIGN 64)
 set(RAJA_COHERENCE_BLOCK_SIZE 64)
 
-
 # exclude RAJA make targets from top-level build...
 add_subdirectory(tpl/RAJA)
+
+if(ENABLE_CALIPER)
+  set(WITH_SAMPLER Off)
+  set(WITH_NVPROF On)
+  add_definitions("-DLAGHOS_ENABLE_CALIPER")
+  add_subdirectory(tpl/caliper)
+  get_property(CALIPER_INCLUDE_DIRS DIRECTORY tpl/caliper PROPERTY INCLUDE_DIRECTORIES)
+  MESSAGE( STATUS "CALIPER_INCLUDE_DIRS:           " ${CALIPER_INCLUDE_DIRS})
+  include_directories(${CALIPER_INCLUDE_DIRS})
+endif()
 
 get_property(RAJA_INCLUDE_DIRS DIRECTORY tpl/RAJA PROPERTY INCLUDE_DIRECTORIES)
 include_directories(${RAJA_INCLUDE_DIRS})
@@ -75,6 +85,9 @@ set(LAGHOS_VERSION_PATCHLEVEL 0)
 
 set(LAGHOS_DEPENDS RAJA)
 list(APPEND LAGHOS_DEPENDS mfem)
+if(ENABLE_CALIPER)
+list(APPEND LAGHOS_DEPENDS caliper)
+endif()
 
 if (ENABLE_OPENMP)
   list(APPEND LAGHOS_DEPENDS openmp)
