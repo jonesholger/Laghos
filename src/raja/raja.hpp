@@ -15,12 +15,6 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #ifndef LAGHOS_RAJA
 #define LAGHOS_RAJA
-#include <caliper/cali_macros.h>
-#ifdef LAGHOS_ENABLE_CALIPER
-#define LAGHOS_MARK_FUNCTION CALI_CXX_MARK_FUNCTION;
-#else
-#define LAGHOS_MARK_FUNCTION
-#endif
 // DBG *************************************************************************
 //#include "dbg.hpp"
 //#define __dbg__ dbg();
@@ -30,6 +24,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <profiling.hpp>
 
 // MFEM/fem  *******************************************************************
 #include "fem/gridfunc.hpp"

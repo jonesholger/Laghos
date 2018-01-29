@@ -7,6 +7,7 @@
 // element discretizations for exascale applications. For more information and
 // source code availability see http://github.com/ceed.
 //
+//
 // The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
 // a collaborative effort of two U.S. Department of Energy organizations (Office
 // of Science and the National Nuclear Security Administration) responsible for
@@ -50,9 +51,8 @@
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
 
-#include <caliper/Annotation.h>
-#include <caliper/cali_macros.h>
 #include "laghos_solver.hpp"
+#include "profiling.hpp"
 #include <memory>
 #include <iostream>
 #include <fstream>
@@ -94,6 +94,7 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    bool cuda = false;
+   bool profile_cuda = false;
    const char *basename = "results/Laghos";
 
    OptionsParser args(argc, argv);
@@ -136,6 +137,8 @@ int main(int argc, char *argv[])
                   "Name of the visit dump files");
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
                   "Enable or disable CUDA kernels.");
+   args.AddOption(&profile_cuda, "-profile-cuda", "--profile-cuda", "-no-profile-cuda", "--no-profile-cuda",
+                  "Enable or disable CUDA kernel profiling.");
    args.Parse();
    if (!args.Good())
    {
@@ -146,6 +149,9 @@ int main(int argc, char *argv[])
    
    // Setting the info CUDA kernels are requested
    is_managed=cuda;
+   if(profile_cuda){
+      enableCudaProfiling();
+   }
    
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
