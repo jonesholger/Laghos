@@ -28,6 +28,7 @@ cmake \
   -DENABLE_OPENMP=On \
   -DENABLE_CALIPER=On \
   -DWITH_NVPROF=On \
+  -DWITH_CALLPATH=Off \
   -DENABLE_CUDA=On \
   -DENABLE_CUB=On \
   -DCUDA_TOOLKIT_ROOT_DIR=/usr/tce/packages/cuda/cuda-9.0.176 \

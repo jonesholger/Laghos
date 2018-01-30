@@ -55,6 +55,7 @@ add_subdirectory(tpl/RAJA)
 
 if(ENABLE_CALIPER)
   set(WITH_SAMPLER Off)
+  set(WITH_CALLPATH Off)
   set(WITH_NVPROF On)
   add_definitions("-DLAGHOS_ENABLE_CALIPER")
   add_subdirectory(tpl/caliper)
