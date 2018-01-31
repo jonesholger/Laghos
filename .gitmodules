@@ -9,3 +9,6 @@
 	path = MFEM
   url = git@github.com:jonesholger/MFEM.git
   branch = feature/mfem_submodule
+[submodule "tpl/caliper"]
+	path = tpl/caliper
+	url = git@github.com:LLNL/Caliper

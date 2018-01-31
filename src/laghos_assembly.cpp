@@ -159,6 +159,7 @@ void RajaForceOperator::Setup()
 // *************************************************************************
 void RajaForceOperator::Mult(const RajaVector &vecL2,
                              RajaVector &vecH1) const {
+   LAGHOS_MARK_FUNCTION
    l2fes.GlobalToLocal(vecL2, gVecL2);
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
@@ -183,6 +184,7 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
 // *************************************************************************
 void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
                                       RajaVector &vecL2) const {
+   LAGHOS_MARK_FUNCTION
    h1fes.GlobalToLocal(vecH1, gVecH1);
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());

@@ -30,6 +30,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec)
 {
+   LAGHOS_MARK_FUNCTION
    ParMesh &pmesh = *gf.ParFESpace()->GetParMesh();
    MPI_Comm comm = pmesh.GetComm();
 
@@ -170,6 +171,7 @@ LagrangianHydroOperator::~LagrangianHydroOperator() {}
 // *****************************************************************************
 void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 {
+   LAGHOS_MARK_FUNCTION
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -287,6 +289,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
 {
+   LAGHOS_MARK_FUNCTION
    Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
    ParGridFunction x(&H1FESpace, h_x.GetData());
    H1FESpace.GetMesh()->NewNodes(x, false);
@@ -305,6 +308,7 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
+   LAGHOS_MARK_FUNCTION
    rho.SetSpace(&L2FESpace);
 
    DenseMatrix Mrho(l2dofs_cnt);

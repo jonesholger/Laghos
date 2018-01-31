@@ -16,6 +16,7 @@
 #ifndef LAGHOS_RAJA_KERNELS_RAJA
 #define LAGHOS_RAJA_KERNELS_RAJA
 
+#include <profiling.hpp>
 // *****************************************************************************
 #undef NDEBUG
 #include <math.h>

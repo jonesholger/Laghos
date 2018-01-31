@@ -15,7 +15,6 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #ifndef LAGHOS_RAJA
 #define LAGHOS_RAJA
-
 // DBG *************************************************************************
 //#include "dbg.hpp"
 //#define __dbg__ dbg();
@@ -25,6 +24,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <profiling.hpp>
 
 // MFEM/fem  *******************************************************************
 #include "fem/gridfunc.hpp"

@@ -18,6 +18,7 @@ blt_add_executable(
   SOURCES laghos.cpp 
   laghos_assembly.cpp
   laghos_solver.cpp
+  profiling.cpp
   DEPENDS_ON ${LAGHOS_EXECUTABLE_DEPENDS}
   )
 

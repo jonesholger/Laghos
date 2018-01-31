@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "raja/raja.hpp"
+#include <caliper/cali_macros.h>
 
 #include "laghos_assembly.hpp"
 
