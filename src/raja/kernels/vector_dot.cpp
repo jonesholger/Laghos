@@ -22,21 +22,19 @@
 
 using namespace RAJA;
 
-#if 0
+#if 1
 
 
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-  //ReduceDecl(Sum,dot,0.0);
-  ReduceSum<cuda_reduce_atomic<256>,double> dot(0.0);
-  //cout << "Setting Grid Stride Mode to occupancy_size" << endl; 
+  ReduceSum<cuda_reduce<512>,double> dot(0.0);
   static bool s_GSModeSet = false;
   if(!s_GSModeSet) { 
     RAJA::policy::cuda::getGridStrideMode() = RAJA::policy::cuda::GridStrideMode::occupancy_size;
     s_GSModeSet = true;
   }  
-  forall<cuda_exec<256> >(0,N, [=] __device__(int i) {
+  forall<cuda_exec<512> >(0,N, [=] __device__(int i) {
     dot += vec1[i] * vec2[i];
   });
   return dot.get();
@@ -44,7 +42,7 @@ double vector_dot(const int N,
 
 #endif
 
-#if 1
+#if 0
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {

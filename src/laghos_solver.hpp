@@ -19,7 +19,10 @@
 
 #include "mfem.hpp"
 #include "raja/raja.hpp"
+
+#ifdef LAGHOS_ENABLE_CALIPER
 #include <caliper/cali_macros.h>
+#endif
 
 #include "laghos_assembly.hpp"
 
