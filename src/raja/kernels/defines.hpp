@@ -55,13 +55,14 @@
 // RAJA forall *****************************************************************
 template <typename T>
 void forall(RAJA::Index_type max, T&& body) {
-#ifdef USE_CUDA  
-  static bool s_GSModeSet = false;
-  if(!s_GSModeSet) { 
-    RAJA::policy::cuda::getGridStrideMode() = RAJA::policy::cuda::GridStrideMode::occupancy_size;
-    s_GSModeSet = true;
-  }  
-#endif  
+//#ifdef USE_CUDA  
+//  static bool s_GSModeSet = false;
+//  if(!s_GSModeSet) { 
+//    //RAJA::policy::cuda::getGridStrideMode() = RAJA::policy::cuda::GridStrideMode::occupancy_size;
+//    RAJA::policy::cuda::getGridStrideMode() = RAJA::policy::cuda::GridStrideMode::disabled;
+//    s_GSModeSet = true;
+//  }  
+//#endif  
   RAJA::forall<exec>(0,max,[=]_device_(RAJA::Index_type i) {
     body(i);
   });
