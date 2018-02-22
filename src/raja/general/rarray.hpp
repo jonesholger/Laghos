@@ -16,6 +16,16 @@
 #ifndef LAGHOS_RAJA_ARRAY
 #define LAGHOS_RAJA_ARRAY
 
+
+#include "umpire/config.hpp"
+#include "umpire/ResourceManager.hpp"
+#include "umpire/Allocator.hpp"
+#include "umpire/util/Exception.hpp"
+#include "umpire/op/MemoryOperationRegistry.hpp"
+#include "umpire/op/MemoryOperation.hpp"
+#include "umpire/strategy/AllocationStrategy.hpp"
+#include "umpire/util/Platform.hpp"
+
 namespace mfem {
 
 template <class T, bool xyz = true> class RajaArray;
@@ -32,8 +42,20 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
   RajaArray(const RajaArray<T,true> &r) {assert(false);}
   RajaArray& operator=(Array<T> &a){
 #if defined(__NVCC__)
-    if (rconfig::Get().Cuda())
-      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
+    if (rconfig::Get().Cuda()) {
+      try { 
+        umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+        auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+        auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+        auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+        auto op = op_registry.find("COPY",host_strat,device_strat);
+        op->transform((void*)a.GetData(), data, nullptr, nullptr,a.Size()*sizeof(T));
+      }
+      catch(...) {
+        printf("RajaArray operator=  host or device pointer not mapped with umpire\n");
+        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
+      }  
+    }  
     else std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
 #else
     std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
@@ -70,8 +92,23 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
 #ifdef __NVCC__
     T *h_data;
     if (rconfig::Get().Cuda()){
-      h_data= (T*)::malloc(bytes());assert(h_data);
-      checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+      umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+      umpire::Allocator host_allocator = rm.getAllocator("HOST");
+      auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+      auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+      auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+      auto op = op_registry.find("COPY",device_strat,host_strat);
+      h_data = static_cast<T*>(host_allocator.allocate(bytes()));
+      //h_data= (T*)::malloc(bytes());assert(h_data);
+
+      try { 
+        op->transform(data,h_data, nullptr, nullptr,bytes());
+      }
+      catch(...) {
+        printf("RajaArray Print  host or device pointer not mapped with umpire\n");
+        checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+      }  
+
     }else h_data=data;
 #else
     T *h_data=data;
@@ -95,8 +132,20 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   ~RajaArray(){rdbg("\033[32m[~I"); rmalloc<T>::operator delete(data);}
   RajaArray& operator=(Array<T> &a){
 #ifdef __NVCC__
-    if (rconfig::Get().Cuda())
-      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
+    if (rconfig::Get().Cuda()) {
+      try { 
+        umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+        auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+        auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+        auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+        auto op = op_registry.find("COPY",host_strat,device_strat);
+        op->transform((void*)a.GetData(), data, nullptr, nullptr,a.Size()*sizeof(T));
+      }
+      catch(...) {
+        printf("RajaArray operator=  host or device pointer not mapped with umpire\n");
+        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
+      }  
+    }  
     else std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
 #else
     std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
@@ -139,8 +188,22 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
 #ifdef __NVCC__
     T *h_data;
     if (rconfig::Get().Cuda()){
-      h_data= (T*)::malloc(bytes());assert(h_data);
-      checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+      umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+      umpire::Allocator host_allocator = rm.getAllocator("HOST");
+      auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+      auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+      auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+      auto op = op_registry.find("COPY",device_strat,host_strat);
+      h_data = static_cast<T*>(host_allocator.allocate(bytes()));
+      //h_data= (T*)::malloc(bytes());assert(h_data);
+
+      try { 
+        op->transform(data,h_data, nullptr, nullptr,bytes());
+      }
+      catch(...) {
+        printf("RajaArray Print  host or device pointer not mapped with umpire\n");
+        checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+      }  
     }else h_data=data;
 #else
     T *h_data=data;

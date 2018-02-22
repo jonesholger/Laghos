@@ -28,9 +28,11 @@ cmake \
   -DENABLE_OPENMP=On \
   -DENABLE_CUDA=On \
   -DENABLE_CUB=On \
+  -DENABLE_UMPIRE=On \
   -DCUDA_TOOLKIT_ROOT_DIR=/usr/tce/packages/cuda/cuda-9.0.176 \
   -DENABLE_ALL_WARNINGS=Off \
   -DCMAKE_INSTALL_PREFIX=../install_blueos_nvcc9.0_gcc4.9.3 \
   -DCUB_DIR=$HOME/workspace/cub \
+  -Dumpire_DIR=$HOME/workspace/CEED/umpire/install_blueos_nvcc9.0_gcc4.9.3/share/umpire/cmake \
   "$@" \
   ${LAGHOS_DIR}

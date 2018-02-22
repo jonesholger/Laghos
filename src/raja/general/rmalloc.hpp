@@ -16,6 +16,12 @@
 #ifndef LAGHOS_RAJA_MALLOC
 #define LAGHOS_RAJA_MALLOC
 
+#include "umpire/config.hpp"
+#include "umpire/ResourceManager.hpp"
+#include "umpire/Allocator.hpp"
+#include "umpire/util/Exception.hpp"
+#include <signal.h>
+
 // ***************************************************************************
 extern bool uvm;
 extern bool cuda;
@@ -23,8 +29,8 @@ extern bool cuda;
 namespace mfem {
 
 // *****************************************************************************
+#if 0
 template<class T> struct rmalloc{
-
   // ***************************************************************************
   void* operator new(size_t n) {
     rdbg("+]\033[m");
@@ -64,8 +70,87 @@ template<class T> struct rmalloc{
 #endif // __NVCC__
     ptr = nullptr;
   }
+
 };
 
+#endif
+
+#if 1
+template<class T> struct rmalloc{
+
+  void* operator new(size_t n) {
+    rdbg("+]\033[m");
+    auto &rm = umpire::ResourceManager::getInstance();
+    umpire::Allocator host_allocator = rm.getAllocator("HOST");
+    umpire::Allocator device_allocator = rm.getAllocator("DEVICE");
+
+    if (!rconfig::Get().Cuda()) return static_cast<void*>(host_allocator.allocate(n*sizeof(T)));
+
+#ifdef __NVCC__
+    void *ptr;
+    push(new,Purple);
+    if (!rconfig::Get().Uvm()){
+      //cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
+      ptr = static_cast<void*>(device_allocator.allocate(n*sizeof(T)));
+    }else{
+      cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
+    }
+    pop();
+    return ptr;
+#else
+    // We come here when the user requests a manager,
+    // but has compiled the code without NVCC
+    assert(false);
+#endif // __NVCC__
+
+  }
+  // ***************************************************************************
+  void operator delete(void *ptr) {
+    rdbg("-]\033[m");
+    auto &rm = umpire::ResourceManager::getInstance();
+    umpire::Allocator host_allocator = rm.getAllocator("HOST");
+    umpire::Allocator device_allocator = rm.getAllocator("DEVICE");
+
+    if (!rconfig::Get().Cuda()) {
+      if(ptr) {
+        try {
+          host_allocator.deallocate(ptr);
+        }
+        catch(...) {  
+          ::delete[] static_cast<T*>(ptr);
+        }  
+      }
+      else {
+        printf("Requesting delete of host side nil pointer\n");
+      }
+    }  
+#ifdef __NVCC__
+    else {
+      push(delete,Fuchsia);
+      if (!rconfig::Get().Uvm()){
+        if(ptr) {
+          try {
+            device_allocator.deallocate(ptr);
+          }
+          catch(...) {
+            cuMemFree((CUdeviceptr)ptr);
+          }
+        }
+        else{
+          printf("Requesting delete of device side nil pointer\n");
+        }  
+      }
+      else {
+        cuMemFree((CUdeviceptr)ptr);
+      }  
+      pop();
+    }
+#endif // __NVCC__
+    ptr = nullptr;
+  }
+};
+
+#endif
 } // mfem
 
 #endif // LAGHOS_RAJA_MALLOC

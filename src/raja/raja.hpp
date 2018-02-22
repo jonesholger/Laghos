@@ -67,5 +67,17 @@
 // LAGHOS/raja/tests ***********************************************************
 #include "tests/tests.hpp"
 
+//Umpire
+#include "umpire/config.hpp"
+#include "umpire/ResourceManager.hpp"
+#include "umpire/Allocator.hpp"
+#include "umpire/util/Exception.hpp"
+#include "umpire/op/MemoryOperationRegistry.hpp"
+#include "umpire/op/MemoryOperation.hpp"
+#include "umpire/strategy/AllocationStrategy.hpp"
+#include "umpire/util/Platform.hpp"
+
+
+
 #endif // LAGHOS_RAJA
 
