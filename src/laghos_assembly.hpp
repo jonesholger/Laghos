@@ -83,13 +83,13 @@ public:
                     const IntegrationRule &ir) : quad_data(qd),
                                                  integ_rule(ir) {}
 
-  virtual void AssembleRHSElementVect(const FiniteElement &fe,
-                                      ElementTransformation &Tr,
-                                      Vector &elvect);
+  void AssembleRHSElementVect(const FiniteElement &fe,
+                              ElementTransformation &Tr,
+                              Vector &elvect);
   
-  virtual void AssembleRHSElementVect(const FiniteElement &el,
-                                       FaceElementTransformations &Tr,
-                                      Vector &elvect){assert(false);}
+  void AssembleRHSElementVect(const FiniteElement &el,
+                              FaceElementTransformations &Tr,
+                              Vector &elvect){assert(false);}
 
 };
 
@@ -99,7 +99,9 @@ public:
 class RajaMassOperator : public RajaOperator
 {
 private:
-   int dim, nzones;
+   int dim;
+   int nzones;
+   const bool use_share;
    RajaFiniteElementSpace &fes;
    const IntegrationRule &integ_rule;
    int ess_tdofs_count;
@@ -119,7 +121,7 @@ public:
    void SetEssentialTrueDofs(Array<int> &dofs);
    // Can be used for both velocity and specific internal energy. For the case
    // of velocity, we only work with one component at a time.
-   virtual void Mult(const RajaVector &x, RajaVector &y) const;
+   void Mult(const RajaVector &x, RajaVector &y) const;
    void EliminateRHS(RajaVector &b);
 };
 
@@ -130,6 +132,7 @@ class RajaForceOperator : public RajaOperator
 private:
   const int dim;
   const int nzones;
+  const bool use_share;
   const RajaFiniteElementSpace &h1fes, &l2fes;
   const IntegrationRule &integ_rule;
   const QuadratureData *quad_data;
@@ -141,8 +144,8 @@ public:
                      const IntegrationRule &integ_rule,
                      const QuadratureData *quad_data_);
    void Setup();
-   virtual void Mult(const RajaVector &vecL2, RajaVector &vecH1) const;
-   virtual void MultTranspose(const RajaVector &vecH1, RajaVector &vecL2) const;
+   void Mult(const RajaVector &vecL2, RajaVector &vecH1) const;
+   void MultTranspose(const RajaVector &vecH1, RajaVector &vecL2) const;
   ~RajaForceOperator();
 };
 

@@ -1,10 +1,19 @@
 blt_add_library(
   NAME laghos_raja
-  SOURCES rbilinearform.cpp
-  rbilininteg.cpp
-  rfespace.cpp
-  rgridfunc.cpp
-  rmalloc.cpp
-  rvector.cpp
+  SOURCES config/rconfig.cpp
+  config/rnvvp.cpp
+  fem/rbilinearform.cpp
+  fem/rbilininteg.cpp
+  fem/rconform.cpp
+  fem/rfespace.cpp
+  fem/rgridfunc.cpp
+  fem/rprolong.cpp
+  fem/rrestrict.cpp
+  general/rcommd.cpp
+  general/rcommunicator.cpp
+  general/rtable.cpp
+  linalg/rvector.cpp
+  tests/dot.cpp
+  tests/mult.cpp 
   DEPENDS_ON laghos_raja_kernels ${LAGHOS_DEPENDS}
   )

@@ -7,7 +7,6 @@
 // element discretizations for exascale applications. For more information and
 // source code availability see http://github.com/ceed.
 //
-//
 // The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
 // a collaborative effort of two U.S. Department of Energy organizations (Office
 // of Science and the National Nuclear Security Administration) responsible for
@@ -51,28 +50,28 @@
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
 
+
 #include "laghos_solver.hpp"
-#include "profiling.hpp"
 #include <memory>
 #include <iostream>
 #include <fstream>
+#include <sys/time.h>
 
 using namespace std;
 using namespace mfem;
 using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
-int problem;
+int problem = 0;
 
 void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
-   //dbgIni(argv[0]);dbg();
-   // Initialize MPI.
-   MPI_Session mpi(argc, argv);
+    // Initialize MPI.
+   MPI_Session mpi(argc, argv); 
    int myid = mpi.WorldRank();
-
+   
    // Print the banner.
    if (mpi.Root()) { display_banner(cout); }
 
@@ -93,8 +92,19 @@ int main(int argc, char *argv[])
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
+   bool dot = false;
+   bool mult = false;
    bool cuda = false;
-   bool profile_cuda = false;
+   bool uvm = false;
+   bool share = false;
+   bool occa = false;
+   bool sync = false;
+   
+#ifdef __NVCC__
+#ifndef __RAJA__
+   cuda=true;
+#endif
+#endif
    const char *basename = "results/Laghos";
 
    OptionsParser args(argc, argv);
@@ -135,10 +145,20 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
+   args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
+                  "Enable or disable DOT test kernels.");
+   args.AddOption(&mult, "-mult", "--mult", "-no-mult", "--no-mult",
+                  "Enable or disable MULT test kernels.");
+   args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
+                  "Enable or disable CUDA managed alloc.");
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
                   "Enable or disable CUDA kernels.");
-   args.AddOption(&profile_cuda, "-profile-cuda", "--profile-cuda", "-no-profile-cuda", "--no-profile-cuda",
-                  "Enable or disable CUDA kernel profiling.");
+   args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
+                  "Enable or disable SHARE kernels.");
+   args.AddOption(&occa, "-occa", "--occa", "-not-occa", "--no-occa",
+                  "Enable or disable 'like' occa kernels.");
+   args.AddOption(&sync, "-sync", "--sync", "-no-sync", "--no-sync",
+                  "Enable or disable Enforced Kernel Synchronization.");
    args.Parse();
    if (!args.Good())
    {
@@ -146,12 +166,11 @@ int main(int argc, char *argv[])
       return 1;
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
-   
-   // Setting the info CUDA kernels are requested
-   is_managed=cuda;
-   if(profile_cuda){
-      enableCudaProfiling();
-   }
+
+   // CUDA set device & tweak options
+   // **************************************************************************
+   rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
+                        cuda,uvm,share,occa,sync,dot,rs_levels);
    
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
@@ -168,7 +187,6 @@ int main(int argc, char *argv[])
       }
    }
 
-
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize();
@@ -182,6 +200,8 @@ int main(int argc, char *argv[])
    }
    if (product == num_tasks)
    {
+      if (myid == 0)
+        printf("\033[32m[laghos] \033[32;1mCartesian\033[m\033[32m partitioning will be used\033[m\n");
       int *partitioning = mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
       delete[] partitioning;
@@ -190,7 +210,7 @@ int main(int argc, char *argv[])
    {
       if (myid == 0)
       {
-         cout << "Non-Cartesian partitioning through METIS will be used.\n";
+        printf("\033[32m[laghos] Non-Cartesian partitioning through METIS will be used\033[m\n");
 #ifndef MFEM_USE_METIS
          cout << "MFEM was built without METIS. "
               << "Adjust the number of tasks to use a Cartesian split." << endl;
@@ -203,20 +223,36 @@ int main(int argc, char *argv[])
    }
    delete [] nxyz;
    delete mesh;
+   
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
+   // **************************************************************************
+   if (mult){
+     multTest(pmesh,order_v,max_tsteps);
+     MPI_Finalize();
+     exit(0);
+   }
+   
+   // **************************************************************************
+   //cuProfilerStart();
+   push(Tan);
+
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
+   //dbg()<<"\033[7mDefine the parallel finite element spaces";
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
+   //dbg()<<"\033[7mL2FESpace RajaFiniteElementSpace";
    RajaFiniteElementSpace L2FESpace(pmesh, &L2FEC);
+   //dbg()<<"\033[7mH1FESpace RajaFiniteElementSpace";
    RajaFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
+   //dbg()<<"\033[7mBoundary conditions";
    Array<int> essential_tdofs;
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
@@ -231,22 +267,23 @@ int main(int argc, char *argv[])
    }
 
    // Define the explicit ODE solver used for time integration.
+   //dbg()<<"\033[7mDefine the explicit ODE solver";
    RajaODESolver *ode_solver = NULL;
-   switch (ode_solver_type)
-   {
-      case 1: ode_solver = new RajaForwardEulerSolver; break;
-      case 2: ode_solver = new RajaRK2Solver(0.5); break;
-      case 3: ode_solver = new RajaRK3SSPSolver; break;
-      case 4: ode_solver = new RajaRK4Solver; break;
-      case 6: ode_solver = new RajaRK6Solver; break;
-      default:
-         if (myid == 0)
-         {
-            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
-         }
-         delete pmesh;
-         MPI_Finalize();
-         return 3;
+   switch (ode_solver_type) {
+   case 1: ode_solver = new RajaForwardEulerSolver; break;
+   case 2: ode_solver = new RajaRK2Solver(0.5); break;
+   case 3: ode_solver = new RajaRK3SSPSolver; break;
+   case 4: ode_solver = new RajaRK4Solver; break;
+   case 6: ode_solver = new RajaRK6Solver; break;
+   default:
+     if (myid == 0)
+     {
+       cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
+     }
+     delete pmesh;
+     MPI_Finalize();
+     pop();
+     return 3;
    }
 
    HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
@@ -257,7 +294,7 @@ int main(int argc, char *argv[])
       cout << "Number of kinematic (position, velocity) dofs: "
            << glob_size_h1 << endl;
       cout << "Number of specific internal energy dofs: "
-           << glob_size_l2 << endl;
+           << glob_size_l2 << endl<< endl;
    }
 
    int Vsize_l2 = L2FESpace.GetVSize();
@@ -267,7 +304,7 @@ int main(int argc, char *argv[])
    // - 0 -> position
    // - 1 -> velocity
    // - 2 -> specific internal energy
-
+   //dbg()<<"[7mS monolithic BlockVector";
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
@@ -279,23 +316,30 @@ int main(int argc, char *argv[])
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
+   //dbg()<<"[7mParGridFunction: x,v,e";
    ParGridFunction x_gf(&H1FESpace);
    ParGridFunction v_gf(&H1FESpace);
    ParGridFunction e_gf(&L2FESpace);
 
-   RajaGridFunction o_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
-   RajaGridFunction o_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
-   RajaGridFunction o_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
-
+   //dbg()<<"[7mRajaGridFunction: d_x_gf";
+   RajaGridFunction d_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
+   //dbg()<<"[7mRajaGridFunction: d_v_gf";
+   RajaGridFunction d_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
+   //dbg()<<"[7mRajaGridFunction: d_e_gf";
+   RajaGridFunction d_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
+   
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
+   //dbg()<<"[7mSetNodalGridFunction";
    pmesh->SetNodalGridFunction(&x_gf);
-   o_x_gf = x_gf;
-
+   //dbg()<<"[7md_x_gf = x_gf;";
+   d_x_gf = x_gf;
+   
    // Initialize the velocity.
+   //dbg()<<"[7mInitialize the velocity";
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
-   o_v_gf = v_gf;
+   d_v_gf = v_gf;
 
    // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -303,6 +347,7 @@ int main(int argc, char *argv[])
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
    // time evolution.
+   //dbg()<<"[7mInitialize density and specific internal energy";
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -310,8 +355,10 @@ int main(int argc, char *argv[])
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
    l2_rho.ProjectCoefficient(rho_coeff);
    rho.ProjectGridFunction(l2_rho);
-   RajaGridFunction o_rho(L2FESpace);
-   o_rho = rho;
+   RajaGridFunction d_rho(L2FESpace);
+   d_rho = rho;
+   
+   //dbg()<<"[7mproblem 1 or else[m";
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -324,12 +371,12 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
-   o_e_gf = e_gf;
+   d_e_gf = e_gf;
 
-   // Space-dependent ideal gas coefficient over the Lagrangian mesh.
+   //dbg()<<"[7mSpace-dependent ideal gas coefficient over the Lagrangian mesh.";
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
 
-   // Additional details, depending on the problem.
+   //dbg()<<"[7mAdditional details, depending on the problem.";
    int source = 0; bool visc=false;
    switch (problem)
    {
@@ -341,10 +388,12 @@ int main(int argc, char *argv[])
       default: MFEM_ABORT("Wrong problem specification!");
    }
 
+   //dbg()<<"[7mLagrangianHydroOperator oper";
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                essential_tdofs, o_rho, source, cfl, material_pcf,
+                                essential_tdofs, d_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter);
 
+   //dbg()<<"[7msocketstream";
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -393,10 +442,15 @@ int main(int argc, char *argv[])
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
+   
+   //dbg()<<"[7mResetTimeStepEstimate, GetTimeStepEstimate";
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
-   RajaVector S_old(S);
+   //dbg()<<"[7mS_old(S)";
+   RajaVector S_old(S);//D2D
+   
+   //dbg("[7mfor(last_step)");
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -406,16 +460,30 @@ int main(int argc, char *argv[])
       }
       if (steps == max_tsteps) { last_step = true; }
 
-      S_old = S;
+      S_old = S;//D2D
       t_old = t;
+      //dbg("[7mResetTimeStepEstimate");
       oper.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
+      //dbg()<<"[7mRode_solver->Step";
+      cuProfilerStart();
       ode_solver->Step(S, t, dt);
       steps++;
+      //cuProfilerStop();
+//#warning exit
+//      MPI_Finalize();
+//      exit(0);
+
+      // Make sure that the mesh corresponds to the new solution state.
+      //dbg("[7mMake sure that the mesh corresponds to the new solution state.");
+      //#warning NewNodes x_gf
+      x_gf = d_x_gf;
+      pmesh->NewNodes(x_gf, false);
 
       // Adaptive time step control.
+      //dbg()<<"[7mAdaptive time step control";
       const double dt_est = oper.GetTimeStepEstimate(S);
       if (dt_est < dt)
       {
@@ -431,14 +499,11 @@ int main(int argc, char *argv[])
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
-
-      // Make sure that the mesh corresponds to the new solution state.
-      x_gf = o_x_gf;
-      pmesh->NewNodes(x_gf, false);
+      
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         double loc_norm = o_e_gf * o_e_gf, tot_norm;
+         double loc_norm = d_e_gf * d_e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
          if (mpi.Root())
@@ -534,7 +599,8 @@ int main(int argc, char *argv[])
    delete ode_solver;
    delete pmesh;
    delete material_pcf;
-
+   //RajaDofQuadMaps::delRajaDofQuadMaps();
+   pop();
    return 0;
 }
 

@@ -16,7 +16,6 @@
 #ifndef LAGHOS_RAJA_KERNELS_RAJA
 #define LAGHOS_RAJA_KERNELS_RAJA
 
-#include <profiling.hpp>
 // *****************************************************************************
 #undef NDEBUG
 #include <math.h>
@@ -32,14 +31,25 @@
 // *****************************************************************************
 #ifdef __NVCC__
 #include <cuda.h>
+#include <helper_cuda.h>
+#include <helper_functions.h>
+#endif // __NVCC__
+
+// *****************************************************************************
+#ifdef __RAJA__
+#include <cuda.h>
 #include "RAJA/RAJA.hpp"
 #include "RAJA/util/defines.hpp"
 #include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
 #endif
 
 // *****************************************************************************
-#include "forall.hpp"
-#include "offsets.hpp"
-#include "kernels.hpp"
+#include "../config/rconfig.hpp"
+#include "../config/rnvvp.hpp"
+
+// *****************************************************************************
+#include "include/forall.hpp"
+#include "include/offsets.hpp"
+#include "include/kernels.hpp"
 
 #endif // LAGHOS_RAJA_KERNELS_RAJA

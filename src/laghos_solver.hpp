@@ -20,10 +20,6 @@
 #include "mfem.hpp"
 #include "raja/raja.hpp"
 
-#ifdef LAGHOS_ENABLE_CALIPER
-#include <caliper/cali_macros.h>
-#endif
-
 #include "laghos_assembly.hpp"
 
 #ifdef MFEM_USE_MPI
@@ -66,7 +62,7 @@ struct TimingData
    long long int H1dof_iter, L2dof_iter, dof_tstep, quad_tstep;
 
    TimingData()
-      : H1dof_iter(0), L2dof_iter(0), dof_tstep(0), quad_tstep(0) { }
+      : H1dof_iter(0), L2dof_iter(0), dof_tstep(0), quad_tstep(0) {}
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -102,9 +98,17 @@ protected:
    mutable RajaForceOperator ForcePA;
 
    // Linear solver for energy.
-   RajaCGSolver locCG;
-
+   //RajaCGSolver locCG;
+   RajaCGSolver CG_VMass,CG_EMass;
+  
    mutable TimingData timer;
+
+   // Device vectors we want to keep
+   mutable RajaVector v,e,rhs,B,X;
+   const RajaVector one;
+   mutable RajaVector e_rhs;
+   mutable RajaVector rhs_c;
+   mutable RajaVector v_local,e_quad;
 
    void ComputeMaterialProperties(int nvalues, const double gamma[],
                                   const double rho[], const double e[],
@@ -116,6 +120,7 @@ protected:
          cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
       }
    }
+public:
 
   void UpdateQuadratureData(const RajaVector &S) const;
 

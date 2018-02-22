@@ -50,7 +50,8 @@ set(RAJA_RANGE_MIN_LENGTH 32)
 set(RAJA_DATA_ALIGN 64)
 set(RAJA_COHERENCE_BLOCK_SIZE 64)
 
-# exclude RAJA make targets from top-level build...
+add_definitions(-D__LAMBDA__=1 -D__TEMPLATES__=1 -D__RAJA__=1)
+
 add_subdirectory(tpl/RAJA)
 
 if(ENABLE_CALIPER)
@@ -64,6 +65,20 @@ if(ENABLE_CALIPER)
   MESSAGE( STATUS "CALIPER_INCLUDE_DIRS:           " ${CALIPER_INCLUDE_DIRS})
   include_directories(${CALIPER_INCLUDE_DIRS})
 endif()
+
+#    LIBRARIES "umpire;umpire_resource;umpire_strategy;umpire_op;umpire_tpl_cnmem;umpire_tpl_judy;umpire_util")
+if(ENABLE_UMPIRE)
+  set(ENABLE_UMPIRE off)  
+  find_package(umpire REQUIRED)
+  set(ENABLE_UMPIRE on)  
+  MESSAGE( STATUS "umpire Enabled")
+  MESSAGE( STATUS "UMPIRE_INCLUDE_DIRS:           " ${UMPIRE_INCLUDE_DIRS})
+  add_definitions("-DLAGHOS_ENABLE_UMPIRE")
+  blt_register_library(
+    NAME umpire
+    INCLUDES ${UMPIRE_INCLUDE_DIRS}
+    LIBRARIES "umpire")
+endif()  
 
 get_property(RAJA_INCLUDE_DIRS DIRECTORY tpl/RAJA PROPERTY INCLUDE_DIRECTORIES)
 include_directories(${RAJA_INCLUDE_DIRS})
@@ -91,6 +106,10 @@ if(ENABLE_CALIPER)
 list(APPEND LAGHOS_DEPENDS caliper)
 endif()
 
+if(ENABLE_UMPIRE)
+  list(APPEND LAGHOS_DEPENDS umpire)
+endif()  
+
 if (ENABLE_OPENMP)
   list(APPEND LAGHOS_DEPENDS openmp)
 endif()
@@ -102,6 +121,22 @@ set(LAGHOS_BUILD_SYSTYPE $ENV{SYS_TYPE})
 set(LAGHOS_BUILD_HOST $ENV{HOSTNAME})
 
 if (ENABLE_CUDA)
+  find_package(CUDA REQUIRED)
+
+  find_library(NVTX_LIBRARY
+    NAME libnvToolsExt.so
+    PATHS ${CUDA_TOOLKIT_ROOT_DIR}/lib64 ${CUDA_TOOLKIT_ROOT_DIR}/lib)
+
+  message(STATUS "NVidia tools extension library found in " ${NVTX_LIBRARY})
+  add_definitions(-D__NVVP__=1)
+  LINK_DIRECTORIES(${CUDA_TOOLKIT_ROOT_DIR}/lib64)
+  LINK_DIRECTORIES(${CUDA_TOOLKIT_ROOT_DIR}/lib)
+  LINK_LIBRARIES(nvToolsExt) 
+  LINK_LIBRARIES(cudadevrt)
+  LINK_LIBRARIES(cuda)
+  #  set(CUDA_HOME /usr/tce/packages/cuda/cuda-9.0.176)
+  #include_directories(${CUDA_HOME}/samples/common/inc) 
+  include_directories(${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc) 
   set(LAGHOS_COMPILER "${CUDA_NVCC_EXECUTABLE}")
   list(APPEND LAGHOS_COMPILER ${CMAKE_CXX_COMPILER})
   set(LAGHOS_COMPILER_OPTIONS "${CUDA_NVCC_FLAGS}")

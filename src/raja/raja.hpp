@@ -15,36 +15,57 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #ifndef LAGHOS_RAJA
 #define LAGHOS_RAJA
-// DBG *************************************************************************
-//#include "dbg.hpp"
-//#define __dbg__ dbg();
 
 // stdincs *********************************************************************
 #undef NDEBUG
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
-#include <profiling.hpp>
+
+// __NVCC__ ********************************************************************
+#ifdef __NVCC__
+#include <cuda.h>
+#include <helper_cuda.h>
+#include <helper_functions.h>
+#define cuCheck checkCudaErrors
+#endif
 
 // MFEM/fem  *******************************************************************
 #include "fem/gridfunc.hpp"
+#include "general/communication.hpp"
 #include "fem/pfespace.hpp"
 
-// LAGHOS/raja *****************************************************************
-#include "rdbg.hpp"
-#include "rmalloc.hpp"
-#include "rarray.hpp"
-#include "rvector.hpp"
-#include "rtypedef.hpp"
+// LAGHOS/raja/config **********************************************************
+#include "config/rdbg.hpp"
+#include "config/rnvvp.hpp"
+#include "config/rconfig.hpp"
+
+// LAGHOS/raja/general *********************************************************
+#include "general/rmalloc.hpp"
+#include "general/rarray.hpp"
+#include "general/rtable.hpp"
+#include "general/rcommunicator.hpp"
+
+// LAGHOS/raja/linalg **********************************************************
+#include "linalg/rvector.hpp"
+#include "linalg/roperator.hpp"
+#include "linalg/rode.hpp"
+#include "linalg/rsolvers.hpp"
 
 // LAGHOS/raja/kernels *********************************************************
-#include "kernels/kernels.hpp"
+#include "kernels/include/kernels.hpp"
 
-// LAGHOS/raja *****************************************************************
-#include "rfespace.hpp"
-#include "rbilinearform.hpp"
-#include "rgridfunc.hpp"
-#include "rbilininteg.hpp"
+// LAGHOS/raja/fem *************************************************************
+#include "fem/rconform.hpp"
+#include "fem/rprolong.hpp"
+#include "fem/rrestrict.hpp"
+#include "fem/rfespace.hpp"
+#include "fem/rbilinearform.hpp"
+#include "fem/rgridfunc.hpp"
+#include "fem/rbilininteg.hpp"
+
+// LAGHOS/raja/tests ***********************************************************
+#include "tests/tests.hpp"
 
 #endif // LAGHOS_RAJA
 
