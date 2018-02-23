@@ -34,8 +34,20 @@ double* RajaVector::alloc(const size_t sz) {
 #ifdef __NVCC__
 #ifdef __RAJA__
   if (ptr) {
-    if (rconfig::Get().Cuda())
-      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));
+    if (rconfig::Get().Cuda()) {
+      try { 
+        umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+        auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+        auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+        auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+        auto op = op_registry.find("COPY",device_strat,device_strat);
+        op->transform((void*)ptr, data, nullptr, nullptr,bytes());
+      }
+      catch(...) {
+        printf("RajaVector::SetSize  host or device pointer not mapped with umpire\n");
+        checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));
+      }  
+    }  
     else ::memcpy(data,ptr,bytes());
   }
 #else // __RAJA__
@@ -74,8 +86,22 @@ RajaVector::RajaVector(const Vector& v):
 #ifdef __NVCC__
 #ifdef __RAJA__
   if (rconfig::Get().Cuda()) {
-    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&data, size*sizeof(double)));
-    checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
+    try { 
+      umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+      umpire::Allocator device_allocator = rm.getAllocator("DEVICE");
+      auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+      auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+      auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+      auto op = op_registry.find("COPY",host_strat,device_strat);
+      data = static_cast<double*>(device_allocator.allocate(bytes()));
+      op->transform((void*)v.GetData(), data, nullptr, nullptr,v.Size()*sizeof(double));
+    }
+    catch(...) {
+      printf("RajaVector::RajaVector host or device pointer not mapped with umpire\n");
+      checkCudaErrors(cuMemAlloc((CUdeviceptr*)&data, size*sizeof(double)));
+      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
+    }  
+
   }else{
     SetSize(v.Size(), v.GetData());  
   }
@@ -94,8 +120,22 @@ RajaVector::operator Vector() {
 #ifdef __NVCC__
 #ifdef __RAJA__
   if (rconfig::Get().Cuda()){
-    double *h_data= (double*) ::malloc(bytes());
-    checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+    umpire::Allocator host_allocator = rm.getAllocator("HOST");
+    auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+    auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+    auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+    auto op = op_registry.find("COPY",device_strat,host_strat);
+
+    //double *h_data= (double*) ::malloc(bytes());
+    double *h_data = static_cast<double*>(host_allocator.allocate(bytes()));
+    try { 
+      op->transform(data, h_data, nullptr, nullptr,bytes());
+    }
+    catch(...) {
+      printf("RajaVector operator Vector() host or device pointer not mapped with umpire\n");
+      checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    }  
     return Vector(h_data,size);
   }else return Vector(data,size);
 #else
@@ -113,8 +153,22 @@ RajaVector::operator Vector() const {
 #ifdef __NVCC__
 #ifdef __RAJA__
   if (rconfig::Get().Cuda()){
-    double *h_data= (double*) ::malloc(bytes());
-    checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+    umpire::Allocator host_allocator = rm.getAllocator("HOST");
+    auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+    auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+    auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+    auto op = op_registry.find("COPY",device_strat,host_strat);
+
+    //double *h_data= (double*) ::malloc(bytes());
+    double *h_data = static_cast<double*>(host_allocator.allocate(bytes()));
+    try { 
+      op->transform(data, h_data, nullptr, nullptr,bytes());
+    }
+    catch(...) {
+      printf("RajaVector operator Vector() host or device pointer not mapped with umpire\n");
+      checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    }  
     return Vector(h_data,size);
   }else return Vector(data,size);
 #else
@@ -134,8 +188,22 @@ void RajaVector::Print(std::ostream& out, int width) const {
 #ifdef __NVCC__
   if (rconfig::Get().Cuda()){
     //dbg()<<"Device 2 Host (const)";
-    h_data= (double*) ::malloc(bytes());
-    checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+    umpire::Allocator host_allocator = rm.getAllocator("HOST");
+    auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+    auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+    auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+    auto op = op_registry.find("COPY",device_strat,host_strat);
+
+    //double *h_data= (double*) ::malloc(bytes());
+    double *h_data = static_cast<double*>(host_allocator.allocate(bytes()));
+    try { 
+      op->transform(data, h_data, nullptr, nullptr,bytes());
+    }
+    catch(...) {
+      printf("RajaVector operator Vector() host or device pointer not mapped with umpire\n");
+      checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    }  
   } else h_data=data;
 #else
   h_data=data;
@@ -174,7 +242,20 @@ RajaVector& RajaVector::operator=(const Vector& v) {
 #ifdef __NVCC__
 #ifdef __RAJA__
   if (rconfig::Get().Cuda()) {
-    checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
+    umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+    auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+    auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+    auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+    auto op = op_registry.find("COPY",host_strat,device_strat);
+
+    try { 
+      op->transform(v.GetData(), data, nullptr, nullptr,v.Size()*sizeof(double));
+    }
+    catch(...) {
+      printf("RajaVector operator= Vector() host or device pointer not mapped with umpire\n");
+      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
+    }  
+
   }else{
     SetSize(v.Size(),v.GetData());  
   }
@@ -217,8 +298,21 @@ RajaVector& RajaVector::operator+=(const Vector& v) {
 #ifdef __NVCC__
 #ifdef __RAJA__
   if (rconfig::Get().Cuda()) {
-    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_v_data, bytes()));
-    checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_v_data,v.GetData(),bytes()));
+    try { 
+      umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+      umpire::Allocator device_allocator = rm.getAllocator("DEVICE");
+      auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+      auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+      auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+      auto op = op_registry.find("COPY",host_strat,device_strat);
+      d_v_data = static_cast<double*>(device_allocator.allocate(bytes()));
+      op->transform((void*)v.GetData(), d_v_data, nullptr, nullptr,bytes());
+    }
+    catch(...) {
+      printf("RajaVector operator+= host or device pointer not mapped with umpire\n");
+      checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_v_data, bytes()));
+      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_v_data,v.GetData(),bytes()));
+    }  
     vector_vec_add(size, data, d_v_data);  
   }else{
     vector_vec_add(size, data, v.GetData());  
