@@ -14,9 +14,9 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
-#include "RAJA/RAJA.hpp"
-#include "RAJA/util/defines.hpp"
-#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
+//#include "RAJA/RAJA.hpp"
+//#include "RAJA/util/defines.hpp"
+//#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
 
 using namespace RAJA;
 
@@ -66,13 +66,17 @@ double vector_dot(const int N,
   }
 #endif
    
-  ReduceSum<cuda_reduce<512>,double> cdot(0.0);
+  ReduceSum<cuda_reduce<1024>,double> cdot(0.0);
+#if 0  
   static bool s_GSModeSet = false;
   if(!s_GSModeSet) { 
     RAJA::policy::cuda::getGridStrideMode() = RAJA::policy::cuda::GridStrideMode::occupancy_size;
     s_GSModeSet = true;
   }  
-  forall<cuda_exec<512> >(0,N, [=] __device__(int i) {
+#endif  
+  printf("vector_dot N=%d\n",N);
+  forall<cuda_exec<1024> >(0,N, [=] __device__(int i) {
+  //forall<cuda_occ_exec<> >(0,N, [=] __device__(int i) {
     cdot += vec1[i] * vec2[i];
   });
   return cdot.get();
