@@ -74,7 +74,7 @@ double vector_dot(const int N,
     s_GSModeSet = true;
   }  
 #endif  
-  printf("vector_dot N=%d\n",N);
+  //printf("vector_dot N=%d\n",N);
   forall<cuda_exec<1024> >(0,N, [=] __device__(int i) {
   //forall<cuda_occ_exec<> >(0,N, [=] __device__(int i) {
     cdot += vec1[i] * vec2[i];

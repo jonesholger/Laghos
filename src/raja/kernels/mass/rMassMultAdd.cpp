@@ -14,6 +14,14 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
+#include "RAJA/RAJA.hpp"
+
+using RAJA::Index_type;
+using RAJA::View;
+using RAJA::Layout;
+using RAJA::nested::Lambda;
+using RAJA::nested::ArgList;
+
 
 // *****************************************************************************
 #ifdef __TEMPLATES__
@@ -92,6 +100,313 @@ void rMassMultAdd2D(
   );
 #endif
 }
+using namespace RAJA;
+using namespace RAJA::nested;
+
+using Pol1 = nested::Policy<
+          CudaKernel<
+            For<0, cuda_threadblock_exec<64>, 
+            Lambda<0>>
+          >
+      >;    
+
+// *****************************************************************************
+template<const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D> kernel
+void rMassMultAdd2DNested1(
+                    const int numElements,
+                    const double* restrict dofToQuad,
+                    const double* restrict dofToQuadD,
+                    const double* restrict quadToDof,
+                    const double* restrict quadToDofD,
+                    const double* restrict oper,
+                    const double* restrict solIn,
+                    double* restrict solOut) {
+
+  //forall(e,numElements,
+  //printf("rMassMultAdd2DNested NUM_DOFS_1D = %d  NUM_QUAD_1D = %d\n",NUM_DOFS_1D, NUM_QUAD_1D);
+  nested::forall<Pol1>(
+    RAJA::make_tuple(RangeSegment(0,numElements)),
+    [=] __device__(int e) 
+    {
+      double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          sol_xy[qy][qx] = 0.0;
+        }
+      }
+      for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+        double sol_x[NUM_QUAD_1D];
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          sol_x[qy] = 0.0;
+        }
+        for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+          const double s = solIn[ijkN(dx,dy,e,NUM_DOFS_1D)];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            sol_x[qx] += dofToQuad[ijN(qx,dx,NUM_QUAD_1D)]* s;
+          }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          const double d2q = dofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            sol_xy[qy][qx] += d2q * sol_x[qx];
+          }
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          sol_xy[qy][qx] *= oper[ijkN(qx,qy,e,NUM_QUAD_1D)];
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        double sol_x[NUM_DOFS_1D];
+        for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+          sol_x[dx] = 0.0;
+        }
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          const double s = sol_xy[qy][qx];
+          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+            sol_x[dx] += quadToDof[ijN(dx,qx,NUM_DOFS_1D)] * s;
+          }
+        }
+        for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+          const double q2d = quadToDof[ijN(dy,qy,NUM_DOFS_1D)];
+          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+            solOut[ijkN(dx,dy,e,NUM_DOFS_1D)] += q2d * sol_x[dx];
+          }
+        }
+      }
+    }
+  );
+}
+
+
+RAJA_INDEX_VALUE(ELEM, "ELEM");
+RAJA_INDEX_VALUE(NUM_QD_1D, "NUM_QD_1D");
+
+using Pol2 = nested::Policy<
+          CudaKernel<
+            SetShmemWindow<
+              For<1, cuda_thread_exec, Lambda<0>>// NUM_QUAD_DOFS_1D
+            >,  
+            For<0, cuda_threadblock_exec<64>, 
+              Lambda<1>
+            >
+          >
+      >;    
+
+// *****************************************************************************
+template<const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D> kernel
+void rMassMultAdd2DNested2(
+                    const int numElements,
+                    const double* restrict dofToQuad,
+                    const double* restrict dofToQuadD,
+                    const double* restrict quadToDof,
+                    const double* restrict quadToDofD,
+                    const double* restrict oper,
+                    const double* restrict solIn,
+                    double* restrict solOut) {
+
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
+  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+
+  auto segments = camp::make_tuple(
+    TypedRangeSegment<ELEM>(0,numElements),
+    TypedRangeSegment<NUM_QD_1D>(0,NUM_QUAD_DOFS_1D)
+  );
+
+  using shmemDofQuadMap_t = SharedMemory<cuda_shmem, double,NUM_QUAD_DOFS_1D>;
+  ShmemWindowView<shmemDofQuadMap_t,ArgList<1>,SizeList<NUM_QUAD_DOFS_1D>,decltype(segments)> shmDof2Quad; 
+  ShmemWindowView<shmemDofQuadMap_t,ArgList<1>,SizeList<NUM_QUAD_DOFS_1D>,decltype(segments)> shmQuad2Dof;
+
+  //printf("rMassMultAdd2DNested NUM_DOFS_1D = %d  NUM_QUAD_1D = %d\n",NUM_DOFS_1D, NUM_QUAD_1D);
+  nested::forall<Pol2>(
+    segments, 
+
+    [=] __device__(ELEM e, NUM_QD_1D qd)
+    {
+      shmDof2Quad(qd) = dofToQuad[(int)*qd];
+      shmQuad2Dof(qd) = quadToDof[(int)*qd];    
+    },
+
+    [=] RAJA_HOST_DEVICE(ELEM e, NUM_QD_1D qd) 
+    {
+      double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          sol_xy[qy][qx] = 0.0;
+        }
+      }
+      for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+        double sol_x[NUM_QUAD_1D];
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          sol_x[qy] = 0.0;
+        }
+        for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+          const double s = solIn[ijkN(dx,dy,(int)*e,NUM_DOFS_1D)];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            //sol_x[qx] += dofToQuad[ijN(qx,dx,NUM_QUAD_1D)]* s;
+            sol_x[qx] += shmDof2Quad(convertIndex<NUM_QD_1D, int>(ijN(qx,dx,NUM_QUAD_1D))) * s;
+          }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          //const double d2q = dofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+          const double d2q = shmDof2Quad(convertIndex<NUM_QD_1D, int>(ijN(qy,dy,NUM_QUAD_1D)));
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            sol_xy[qy][qx] += d2q * sol_x[qx];
+          }
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          sol_xy[qy][qx] *= oper[ijkN(qx,qy,(int)*e,NUM_QUAD_1D)];
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        double sol_x[NUM_DOFS_1D];
+        for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+          sol_x[dx] = 0.0;
+        }
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          const double s = sol_xy[qy][qx];
+          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+            //sol_x[dx] += quadToDof[ijN(dx,qx,NUM_DOFS_1D)] * s;
+            sol_x[dx] += shmQuad2Dof(convertIndex<NUM_QD_1D, int>(ijN(dx,qx,NUM_DOFS_1D))) * s;
+          }
+        }
+        for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+          //const double q2d = quadToDof[ijN(dy,qy,NUM_DOFS_1D)];
+          const double q2d = shmQuad2Dof(convertIndex<NUM_QD_1D, int>(ijN(dy,qy,NUM_DOFS_1D)));
+          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+            solOut[ijkN(dx,dy,(int)*e,NUM_DOFS_1D)] += q2d * sol_x[dx];
+          }
+        }
+      }
+    }
+  );
+}
+
+
+#if 0
+
+using Pol3 = nested::Policy<
+          CudaKernel<
+            SetShmemWindow<
+              For<1, cuda_thread_exec, Lambda<0>>,// NUM_QUAD_DOFS_1D
+              For<2, cuda_threadblock_exec<64>>
+            >,  
+            For<0, cuda_threadblock_exec<64>, 
+              Lambda<1>
+            >
+          >
+      >;    
+
+// *****************************************************************************
+template<const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D> kernel
+void rMassMultAdd2DNested3(
+                    const int numElements,
+                    const double* restrict dofToQuad,
+                    const double* restrict dofToQuadD,
+                    const double* restrict quadToDof,
+                    const double* restrict quadToDofD,
+                    const double* restrict oper,
+                    const double* restrict solIn,
+                    double* restrict solOut) {
+
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
+  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+
+  auto segments = camp::make_tuple(
+    TypedRangeSegment<ELEM>(0,numElements),
+    TypedRangeSegment<NUM_QD_1D>(0,NUM_QUAD_DOFS_1D),
+    TypedRangeSegment<NUM_THREADS>(0,64),
+    TypedRangeSegment<NUM_Q_2D>(0,NUM_QUAD_2D)
+  );
+
+  using shmemDofQuadMap_t = SharedMemory<cuda_shmem, double,NUM_QUAD_DOFS_1D>;
+  using shmemSXY_t = SharedMemory<cuda_shmem, double, NUM_QUAD_2D * 64>; //shmem for sol_xy for each e in local block
+  ShmemWindowView<shmemDofQuadMap_t,ArgList<1>,SizeList<NUM_QUAD_DOFS_1D>,decltype(segments)> shmDof2Quad; 
+  ShmemWindowView<shmemDofQuadMap_t,ArgList<1>,SizeList<NUM_QUAD_DOFS_1D>,decltype(segments)> shmQuad2Dof;
+  ShmemWindowView<shmemSXY_t,Arglist<2,3>,SizeList<64,NUM_QUAD_2D>,decltype(segments)> shmSXY;
+
+  //printf("rMassMultAdd2DNested NUM_DOFS_1D = %d  NUM_QUAD_1D = %d\n",NUM_DOFS_1D, NUM_QUAD_1D);
+  nested::forall<Pol2>(
+    segments, 
+
+    [=] __device__(ELEM e, NUM_QD_1D qd , NUM_THREADS t, NUM_Q_2D)
+    {
+      shmDof2Quad(qd) = dofToQuad[(int)*qd];
+      shmQuad2Dof(qd) = quadToDof[(int)*qd];    
+    },
+
+    [=] __device__(ELEM e, NUM_QD_1D qd , NUM_THREADS t, NUM_Q_2D)
+    {
+      shmSXY = 0.0;
+    }
+
+
+    [=] RAJA_HOST_DEVICE(ELEM e, NUM_QD_1D qd, NUM_THREADS t, NUM_Q_2D)) 
+    {
+      double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          sol_xy[qy][qx] = 0.0;
+        }
+      }
+      for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+        double sol_x[NUM_QUAD_1D];
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          sol_x[qy] = 0.0;
+        }
+        for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+          const double s = solIn[ijkN(dx,dy,(int)*e,NUM_DOFS_1D)];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            //sol_x[qx] += dofToQuad[ijN(qx,dx,NUM_QUAD_1D)]* s;
+            sol_x[qx] += shmDof2Quad(convertIndex<NUM_QD_1D, int>(ijN(qx,dx,NUM_QUAD_1D))) * s;
+          }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          //const double d2q = dofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+          const double d2q = shmDof2Quad(convertIndex<NUM_QD_1D, int>(ijN(qy,dy,NUM_QUAD_1D)));
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            sol_xy[qy][qx] += d2q * sol_x[qx];
+          }
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          sol_xy[qy][qx] *= oper[ijkN(qx,qy,(int)*e,NUM_QUAD_1D)];
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        double sol_x[NUM_DOFS_1D];
+        for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+          sol_x[dx] = 0.0;
+        }
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          const double s = sol_xy[qy][qx];
+          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+            //sol_x[dx] += quadToDof[ijN(dx,qx,NUM_DOFS_1D)] * s;
+            sol_x[dx] += shmQuad2Dof(convertIndex<NUM_QD_1D, int>(ijN(dx,qx,NUM_DOFS_1D))) * s;
+          }
+        }
+        for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+          //const double q2d = quadToDof[ijN(dy,qy,NUM_DOFS_1D)];
+          const double q2d = shmQuad2Dof(convertIndex<NUM_QD_1D, int>(ijN(dy,qy,NUM_DOFS_1D)));
+          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+            solOut[ijkN(dx,dy,(int)*e,NUM_DOFS_1D)] += q2d * sol_x[dx];
+          }
+        }
+      }
+    }
+  );
+}
+
+#endif
 
 // *****************************************************************************
 #ifdef __TEMPLATES__
@@ -254,7 +569,7 @@ void rMassMultAdd(const int DIM,
     {0x20303,&rMassMultAdd2D<3,3>},
     {0x20304,&rMassMultAdd2D<3,4>},
     {0x20305,&rMassMultAdd2D<3,5>},
-    {0x20306,&rMassMultAdd2D<3,6>},
+    {0x20306,&rMassMultAdd2DNested2<3,6>}, /* temp test of nested */
     {0x20307,&rMassMultAdd2D<3,7>},
     {0x20308,&rMassMultAdd2D<3,8>},
     
@@ -262,7 +577,7 @@ void rMassMultAdd(const int DIM,
     {0x20403,&rMassMultAdd2D<4,3>},
     {0x20404,&rMassMultAdd2D<4,4>},
     {0x20405,&rMassMultAdd2D<4,5>},
-    {0x20406,&rMassMultAdd2D<4,6>},
+    {0x20406,&rMassMultAdd2DNested2<4,6>},/* temp test of nested */
     {0x20407,&rMassMultAdd2D<4,7>},
     {0x20408,&rMassMultAdd2D<4,8>},
 
