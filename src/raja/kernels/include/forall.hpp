@@ -25,9 +25,9 @@
 // *****************************************************************************
 #ifdef __RAJA__ // *************************************************************
 //#warning RAJA, WITH NVCC
-#define kernel
 #define sync
-#define share // variable cannot be declared with "shared" inside a host function
+#define share
+#define kernel
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
@@ -39,14 +39,14 @@ const int CUDA_BLOCK_SIZE = 256;
   RAJA::Reduce ## type<sq_reduce, RAJA::Real_type> var(ini);
 #define ReduceForall(i,max,body) \
   RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
-#define forall(i,max,body)                                        \
+#define forall(i,max,body)                                              \
   if (mfem::rconfig::Get().Cuda())                                      \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
 #define forallS(i,max,step,body) {assert(false);forall(i,max,body)}
-#define call0(name,id,grid,blck,...)  call[id](__VA_ARGS__)
-#define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
+#define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
+#define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
 #define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
 
 
@@ -55,31 +55,22 @@ const int CUDA_BLOCK_SIZE = 256;
 #ifdef __NVCC__
 #ifndef __LAMBDA__
 #define kernel __global__
-#define sync __syncthreads();
 #define share __shared__
-//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+128-1)/128),128);
-//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,block);
-//printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck);
-#define cuKer(name,end,...) name ## 0<<<((end+128-1)/128),128>>>(end,__VA_ARGS__)
-
-
-/*CUresult cuLaunchKernel(CUfunction f,
-                          unsigned int  gridDimX, unsigned int  gridDimY, unsigned int  gridDimZ,
-                          unsigned int  blockDimX, unsigned int  blockDimY, unsigned int  blockDimZ,
-                          unsigned int  sharedMemBytes, CUstream hStream,
-                          void** kernelParams, void** extra );*/
+#define sync __syncthreads();
+const int CUDA_BLOCK_SIZE = 256;
+#define cuKer(name,end,...) name ## 0<<<((end+256-1)/256),256>>>(end,__VA_ARGS__)
 #define cuLaunchKer(name,args) {                                      \
     cuLaunchKernel(name ## 0,                                         \
-                   ((end+128-1)/128),1,1,                             \
-                   128,1,1,                                           \
+                   ((end+256-1)/256),1,1,                             \
+                   256,1,1,                                           \
                    0,0,                                               \
                    args);                                             \
       }
-
-
-
-#define cuKerGB(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
-#define call0(name,id,grid,blck,...)  call[id]<<<grid,blck>>>(__VA_ARGS__)
+#define cuKerGBS(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
+#define call0p(name,id,grid,blck,...)                               \
+  printf("\033[32;1m[call0] name=%s grid:%d, block:%d\033[m\n",#name,grid,blck); \
+  call[id]<<<grid,blck>>>(__VA_ARGS__)
+#define call0(name,id,grid,blck,...) call[id]<<<grid,blck>>>(__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
 #define ReduceForall(i,max,body) 
 
@@ -95,13 +86,13 @@ __global__ void gpu(const int length,
                     FORALL_BODY body) {
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int ids = idx * step;
-  if (ids < length) {body(ids);}
+  if (ids < length) {body(idx);}
 }
 template <typename FORALL_BODY>
 void cuda_forallT(const int end,
                   const int step,
                   FORALL_BODY &&body) {
-  const size_t blockSize = 128;
+  const size_t blockSize = 256;
   const size_t gridSize = (end+blockSize-1)/blockSize;
   //printf("\033[32;1m[cuda_forallT] grid:%d, block:%d\033[m\n",gridSize,blockSize);
   gpu<<<gridSize, blockSize>>>(end,step,body);
@@ -109,15 +100,15 @@ void cuda_forallT(const int end,
 #define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
 #define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
-#define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
-#define call0(name,id,grid,blck,...)  call[id](__VA_ARGS__)
+#define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
+#define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
 #define ReduceForall(i,max,body) 
 #endif // __LAMBDA__
 
 
 // *****************************************************************************
-#else // __KERNELS__ on Cpu ****************************************************
+#else // __KERNELS__ on CPU ****************************************************
 //#warning NO RAJA, NO NVCC
 #define sync
 #define share
@@ -148,7 +139,7 @@ public:
 #define call0(name,id,grid,blck,...) name(__VA_ARGS__)
 #endif
 #define cuKer(name,...) name ## 0(__VA_ARGS__)
-#define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
+#define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
 #endif //__NVCC__
 #endif // __RAJA__
 #endif // LAGHOS_RAJA_KERNELS_FORALL

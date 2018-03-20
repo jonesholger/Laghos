@@ -29,12 +29,15 @@ set(ENABLE_TESTS Off CACHE BOOL "")
 
 include(blt/SetupBLT.cmake)
 
+
+
 set(CMAKE_CXX_STANDARD 11)
 set(BLT_CXX_STANDARD 11)
 
 #
 # Define RAJA settings...
 #
+
 
 set(ENABLE_TESTS Off CACHE Bool "")
 set(ENABLE_EXAMPLES Off CACHE Bool "")
@@ -96,10 +99,6 @@ MESSAGE( STATUS "MFEM_INCLUDE_DIRS2:         " ${CMAKE_BINARY_DIR}/MFEM/config )
 include_directories(${HYPRE_INCLUDE_DIRS})
 include_directories(${METIS_INCLUDE_DIRS})
 
-#
-# Setup variables to pass to Perf suite
-#
-
 set(LAGHOS_VERSION_MAJOR 0)
 set(LAGHOS_VERSION_MINOR 1)
 set(LAGHOS_VERSION_PATCHLEVEL 0)
@@ -128,8 +127,8 @@ set(LAGHOS_BUILD_SYSTYPE $ENV{SYS_TYPE})
 set(LAGHOS_BUILD_HOST $ENV{HOSTNAME})
 
 if (ENABLE_CUDA)
+  set(CUDA_SEPARABLE_COMPILATION On)
   find_package(CUDA REQUIRED)
-
   find_library(NVTX_LIBRARY
     NAME libnvToolsExt.so
     PATHS ${CUDA_TOOLKIT_ROOT_DIR}/lib64 ${CUDA_TOOLKIT_ROOT_DIR}/lib)

@@ -17,8 +17,8 @@
 #define LAGHOS_RAJA_KERNELS_RAJA
 
 // *****************************************************************************
-#undef NDEBUG
 #include <math.h>
+#include <stdarg.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +27,9 @@
 
 // *****************************************************************************
 #define LOG2(X) ((unsigned) (8*sizeof(unsigned long long)-__builtin_clzll((X))))
+#define ISQRT(N) static_cast<unsigned>(sqrt(static_cast<float>(N)))
+#define ICBRT(N) static_cast<unsigned>(cbrt(static_cast<float>(N)))
+#define IROOT(D,N) ((D==1)?N:(D==2)?ISQRT(N):(D==3)?ICBRT(N):0)
 
 // *****************************************************************************
 #ifdef __NVCC__
@@ -39,13 +42,17 @@
 #ifdef __RAJA__
 #include <cuda.h>
 #include "RAJA/RAJA.hpp"
-#include "RAJA/util/defines.hpp"
-#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
+//#include "RAJA/util/defines.hpp"
+#include "RAJA/policy/cuda.hpp"
+//#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
 #endif
 
 // *****************************************************************************
-#include "../config/rconfig.hpp"
+#include "../config/rdbg.hpp"
 #include "../config/rnvvp.hpp"
+#include "../config/rconfig.hpp"
+#include "../general/rmemcpy.hpp"
+#include "../general/rmalloc.hpp"
 
 // *****************************************************************************
 #include "include/forall.hpp"

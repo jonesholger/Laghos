@@ -34,18 +34,24 @@ namespace mfem {
     //  ************************************************************************
     bool mps=false;
     int gpu_count=0;
+    int maxXGridSize=0;
+    int maxXThreadsDim=0;
 #ifdef __NVCC__
     CUdevice cuDevice;
     CUcontext cuContext;
-    CUstream hStream=0;
+    CUstream *hStream;
 #endif
     // *************************************************************************
     bool cuda=false;
+    bool dcg=false;
     bool uvm=false;
     bool share=false;
+    bool share_env=false;
     // *************************************************************************
     bool occa=false;
+    bool hcpo=false;
     bool sync=false;
+    bool nvvp=false;
     // *************************************************************************
   private:
     rconfig(){}
@@ -59,16 +65,17 @@ namespace mfem {
     }
     // *************************************************************************
     void Setup(const int,const int,
-               const bool cuda, const bool uvm, const bool share,
-               const bool occa, const bool sync,
-               const bool dot, const int rs_levels);
+               const bool cuda, const bool dcg,
+               const bool uvm, const bool aware,
+               const bool share, const bool occa, const bool hcpo,
+               const bool sync, const bool dot, const int rs_levels);
     // *************************************************************************
     bool IAmAlone();
     bool GeomNeedsUpdate(const int);
     bool DoHostConformingProlongationOperator();
     // *************************************************************************
-    inline bool Rank() { return mpi_rank; }
-    inline bool Size() { return mpi_size; }
+    inline int Rank() { return mpi_rank; }
+    inline int Size() { return mpi_size; }
     inline bool Root() { return mpi_rank==0; }
     inline bool Aware() { return aware; }
     // *************************************************************************
@@ -76,12 +83,18 @@ namespace mfem {
     // *************************************************************************
     inline bool Uvm() { return uvm; }
     inline bool Cuda() { return cuda; }
-    inline bool Share() { return share; }
+    inline bool Dcg() { return dcg; }
+    inline bool Share() { return share && !share_env; }
+    inline bool ShareEnv() { return share_env; }
     inline bool Occa() { return occa; }
+    inline bool Hcpo() { return hcpo; }
     inline bool Sync() { return sync; }
-    // *************************************************************************
+    inline bool Nvvp(bool toggle=false) { return toggle?nvvp=!nvvp:nvvp; }
+    inline int MaxXGridSize() { return maxXGridSize; }
+    inline int MaxXThreadsDim() { return maxXThreadsDim; }
+   // *************************************************************************
 #ifdef __NVCC__
-    inline CUstream Stream() { return hStream; }
+    inline CUstream *Stream() { return hStream; }
 #endif
   };
   

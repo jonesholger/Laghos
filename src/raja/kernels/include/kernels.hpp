@@ -20,6 +20,7 @@
 
 // **** BLAS1 ******************************************************************
 void vector_neg(const int, double* restrict);
+//extern "C" kernel void d_vector_op_eq(const int, const double, double* restrict);
 void vector_op_eq(const int, const double, double* restrict);
 void vector_xpay(const int, const double, double* restrict, const double* restrict,
                  const double* restrict);
@@ -223,22 +224,6 @@ void rLocalToGlobal(const int NUM_VDIM,
                     const double* restrict localX,
                     double* restrict globalX);
 
-// *****************************************************************************
-/*void rMassAssemble(const int dim,
-                   const int NUM_QUAD,
-                   const int numElements,
-                   const double COEFF,
-                   const double* restrict quadWeights,
-                   const double* restrict J,
-                   double* restrict oper);
-void rMassAssembleS(const int dim,
-                    const int NUM_QUAD,
-                    const int numElements,
-                    const double COEFF,
-                    const double* restrict quadWeights,
-                    const double* restrict J,
-                    double* restrict oper);
-*/
 // *****************************************************************************
 void rMassMultAdd(const int dim,
                   const int NUM_DOFS_1D,

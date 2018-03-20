@@ -13,5 +13,19 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
+#ifndef LAGHOS_RAJA_MEMCPY
+#define LAGHOS_RAJA_MEMCPY
 
-bool is_managed = false;
+namespace mfem {
+	
+  // ***************************************************************************
+  struct rmemcpy{
+    static void* rHtoH(void*, const void*, std::size_t, const bool =false);
+    static void* rHtoD(void*, const void*, std::size_t, const bool =false);
+    static void* rDtoH(void*, const void*, std::size_t, const bool =false);
+    static void* rDtoD(void*, const void*, std::size_t, const bool =false);
+  };
+  
+} // mfem
+
+#endif // LAGHOS_RAJA_MEMCPY

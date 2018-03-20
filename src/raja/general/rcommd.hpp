@@ -13,30 +13,41 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef LAGHOS_RAJA_CONFORM_PROLONGATION_OP
-#define LAGHOS_RAJA_CONFORM_PROLONGATION_OP
+#ifndef LAGHOS_RAJA_COMM_D
+#define LAGHOS_RAJA_COMM_D
+
+#ifdef MFEM_USE_MPI
+#include <mpi.h>
+#endif
 
 namespace mfem {
-  
+
   // ***************************************************************************
-  // * RajaConformingProlongationOperator
-  //  **************************************************************************
-  class RajaConformingProlongationOperator : public RajaOperator{
-  protected:
-    Array<int> external_ldofs;
-    //RajaArray<int> d_non_empty_m;
-    RajaArray<int> d_external_ldofs;
-    RajaCommD *gc;
-    int kMaxTh;
+  // * First communicator, buf goes on the device
+  // ***************************************************************************
+  class RajaCommD : public GroupCommunicator, public rmemcpy{
+  private:
+    RajaTable d_group_ldof;
+    RajaTable d_group_ltdof;
+    void *d_group_buf;
+    int comm_lock; // 0 - no lock, 1 - locked for Bcast, 2 - locked for Reduce
+    int num_requests;
   public:
-    RajaConformingProlongationOperator(ParFiniteElementSpace &);
-    ~RajaConformingProlongationOperator();
-    void d_Mult(const RajaVector &x, RajaVector &y) const;
-    void d_MultTranspose(const RajaVector &x, RajaVector &y) const;  
-    void h_Mult(const Vector &x, Vector &y) const;
-    void h_MultTranspose(const Vector &x, Vector &y) const;
-  };
-  
+    RajaCommD(ParFiniteElementSpace&);
+    ~RajaCommD();
+    
+    template <class T> T *d_CopyGroupToBuffer(const T*,T*,int,int) const;
+    template <class T> const T *d_CopyGroupFromBuffer(const T*, T*,int, int) const;
+    template <class T> const T *d_ReduceGroupFromBuffer(const T*,T*,int,int,void (*)(OpData<T>)) const;
+    
+    template <class T> void d_BcastBegin(T*,int);
+    template <class T> void d_BcastEnd(T*, int);
+    
+    template <class T> void d_ReduceBegin(const T*);
+    template <class T> void d_ReduceEnd(T*,int,void (*)(OpData<T>));
+ };
+
+
 } // mfem
 
-#endif // LAGHOS_RAJA_CONFORM_PROLONGATION_OP
+#endif // LAGHOS_RAJA_COMM_D

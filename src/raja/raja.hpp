@@ -41,10 +41,11 @@
 #include "config/rconfig.hpp"
 
 // LAGHOS/raja/general *********************************************************
+#include "general/rmemcpy.hpp"
 #include "general/rmalloc.hpp"
 #include "general/rarray.hpp"
 #include "general/rtable.hpp"
-#include "general/rcommunicator.hpp"
+#include "general/rcommd.hpp"
 
 // LAGHOS/raja/linalg **********************************************************
 #include "linalg/rvector.hpp"

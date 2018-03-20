@@ -10,10 +10,12 @@ blt_add_library(
   fem/rprolong.cpp
   fem/rrestrict.cpp
   general/rcommd.cpp
-  general/rcommunicator.cpp
+  general/rmemcpy.cpp
   general/rtable.cpp
+  linalg/rsolvers.cpp
   linalg/rvector.cpp
   tests/dot.cpp
+  tests/lambda.cpp
   tests/mult.cpp 
   DEPENDS_ON laghos_raja_kernels ${LAGHOS_DEPENDS}
   )

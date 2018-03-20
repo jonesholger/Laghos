@@ -65,11 +65,11 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    pop();
 }
 
+// *****************************************************************************
 RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
                                    const IntegrationRule &integ_rule_,
                                    QuadratureData *quad_data_)
    : RajaOperator(fes_.GetTrueVSize()),
-     use_share(rconfig::Get().Share()),
      fes(fes_),
      integ_rule(integ_rule_),
      ess_tdofs_count(0),
@@ -80,7 +80,6 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
 
 // *****************************************************************************
 RajaMassOperator::~RajaMassOperator(){
-  //delete massOperator;
 }
 
 // *****************************************************************************
@@ -89,7 +88,7 @@ void RajaMassOperator::Setup()
    push(Wheat);
    dim=fes.GetMesh()->Dimension();
    nzones=fes.GetMesh()->GetNE();
-   RajaMassIntegrator &massInteg = *(new RajaMassIntegrator(use_share));
+   RajaMassIntegrator &massInteg = *(new RajaMassIntegrator());
    massInteg.SetIntegrationRule(integ_rule);
    massInteg.SetOperator(quad_data->rho0DetJ0w);
    bilinearForm.AddDomainIntegrator(&massInteg);
@@ -102,29 +101,32 @@ void RajaMassOperator::Setup()
 void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
   push(Wheat);
+  dbg("\n\033[33;1m[SetEssentialTrueDofs] dofs.Size()=%d\033[m",dofs.Size());
   ess_tdofs_count = dofs.Size();
-  if (ess_tdofs_count == 0) { pop(); return; }
+  
   if (ess_tdofs.Size()==0){
 #ifdef MFEM_USE_MPI
     int global_ess_tdofs_count;
     const MPI_Comm comm = fes.GetParMesh()->GetComm();
-    MPI_Allreduce(&ess_tdofs_count,
-                  &global_ess_tdofs_count, 1, MPI_INT, MPI_SUM, comm);
+    MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
+                  1, MPI_INT, MPI_SUM, comm);
+    assert(global_ess_tdofs_count>0);
     ess_tdofs.allocate(global_ess_tdofs_count);
 #else
+    assert(ess_tdofs_count>0);
     ess_tdofs.allocate(ess_tdofs_count);
 #endif
   }else assert(ess_tdofs_count<=ess_tdofs.Size());
 
+  assert(ess_tdofs>0);
+  
+  if (ess_tdofs_count == 0) { pop(); return; }
+  
   {
     push(H2D:ess_tdofs,Red);
-#ifdef __NVCC__
-    if (rconfig::Get().Cuda())
-      cuMemcpyHtoD((CUdeviceptr)ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
-    else ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
-#else
-    ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
-#endif
+    assert(ess_tdofs_count>0);
+    assert(dofs.GetData());
+    rHtoD(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
     pop();
   }
   pop();
@@ -171,7 +173,6 @@ RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
    : RajaOperator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
      dim(h1fes_.GetMesh()->Dimension()),
      nzones(h1fes_.GetMesh()->GetNE()),
-     use_share(rconfig::Get().Share()),
      h1fes(h1fes_),
      l2fes(l2fes_),
      integ_rule(integ_rule_),
@@ -199,7 +200,7 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   if (use_share)
+   if (rconfig::Get().Share())
      rForceMultS(dim,
                  NUM_DOFS_1D,
                  NUM_QUAD_1D,
@@ -239,7 +240,7 @@ void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   if (use_share)
+   if (rconfig::Get().Share())
      rForceMultTransposeS(dim,
                           NUM_DOFS_1D,
                           NUM_QUAD_1D,

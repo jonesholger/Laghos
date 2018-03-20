@@ -19,7 +19,7 @@ namespace mfem {
     GroupCommunicator(pfes.GroupComm()),
     d_group_ldof(group_ldof),
     d_group_ltdof(group_ltdof),
-    d_group_buf(NULL) {}
+    d_group_buf(NULL) {comm_lock=0;}
 
   
   // ***************************************************************************
@@ -27,19 +27,18 @@ namespace mfem {
   // ***************************************************************************
   RajaCommD::~RajaCommD(){ }
 
-  
+
+#ifdef __NVCC__
   // ***************************************************************************
   // * kCopyFromTable
   // ***************************************************************************
-#ifdef __NVCC__
   template <class T> static __global__
   void k_CopyGroupToBuffer(T *buf,const T *data,const int *dofs){
     const int j = blockDim.x * blockIdx.x + threadIdx.x;
     const int idx = dofs[j];
     buf[j]=data[idx];
   }
-#endif
-
+  
   // ***************************************************************************
   // ***************************************************************************
   template <class T> static
@@ -49,15 +48,10 @@ namespace mfem {
     push(PapayaWhip);
     const int ndofs = d_dofs.RowSize(group);
     const int *dofs = d_dofs.GetRow(group);
-#ifndef __NVCC__
-    for (int j = 0; j < ndofs; j++)
-      d_buf[j] = d_ldata[dofs[j]];
-#else
     k_CopyGroupToBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
-#endif
     pop();
     return d_buf + ndofs;
-  }  
+  }
   
   // ***************************************************************************
   // * d_CopyGroupToBuffer
@@ -76,14 +70,12 @@ namespace mfem {
   // ***************************************************************************
   // * k_CopyGroupFromBuffer
   // ***************************************************************************
-#ifdef __NVCC__
   template <class T> static __global__
   void k_CopyGroupFromBuffer(const T *buf,T *data,const int *dofs){
     const int j = blockDim.x * blockIdx.x + threadIdx.x;
     const int idx = dofs[j];
     data[idx]=buf[j];
   }
-#endif
   
   // ***************************************************************************
   // * d_CopyGroupFromBuffer
@@ -95,20 +87,14 @@ namespace mfem {
     assert(layout==0);
     const int ndofs = d_group_ldof.RowSize(group);
     const int *dofs = d_group_ldof.GetRow(group);
-#ifndef __NVCC__
-    for (int j = 0; j < ndofs; j++)    
-      d_ldata[dofs[j]] = d_buf[j];
-#else
     k_CopyGroupFromBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
-#endif
     pop();
     return d_buf + ndofs;
   }
-
+  
   // ***************************************************************************
   // * kAtomicAdd
   // ***************************************************************************
-#ifdef __NVCC__
   template <class T>
   static __global__ void kAtomicAdd(T* adrs, const int* dofs,T *value){
     const int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -117,7 +103,6 @@ namespace mfem {
   }
   template __global__ void kAtomicAdd<int>(int*, const int*, int*);
   template __global__ void kAtomicAdd<double>(double*, const int*, double*);
-#endif
 
   // ***************************************************************************
   // * ReduceGroupFromBuffer
@@ -135,14 +120,10 @@ namespace mfem {
     opd.buf = const_cast<T*>(d_buf);
     dbg("\t\t\033[33m[d_ReduceGroupFromBuffer] layout 2");
     opd.ldofs = const_cast<int*>(d_group_ltdof.GetRow(group));
-#ifndef __NVCC__
-    Op(opd);
-#else
     assert(opd.nb == 1);
     // this is the operation to perform: opd.ldata[opd.ldofs[i]] += opd.buf[i];
     // mfem/general/communication.cpp, line 1008
     kAtomicAdd<<<opd.nldofs,1>>>(opd.ldata,opd.ldofs,opd.buf);
-#endif // __NVCC__
     dbg("\t\t\033[33m[d_ReduceGroupFromBuffer] done");
     pop();
     return d_buf + opd.nldofs;
@@ -162,28 +143,24 @@ namespace mfem {
     const int rnk = rconfig::Get().Rank();
     dbg("\033[33;1m[%d-d_BcastBegin]",rnk);
     int request_counter = 0;
+    push(alloc,Moccasin);
     group_buf.SetSize(group_buf_size*sizeof(T));
     T *buf = (T *)group_buf.GetData();
-#ifdef __NVCC__
     if (!d_group_buf){
       push(alloc,Purple);
+      d_group_buf = rmalloc<T>::operator new(group_buf_size);
       dbg("\n\033[31;1m[%d-d_ReduceBegin] d_buf cuMemAlloc\033[m",rnk);
-      checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_group_buf,group_buf_size*sizeof(T)));
       pop();
     }
     T *d_buf = (T*)d_group_buf;
-#else
-    T *d_buf = (T*)buf;
-#endif
+    pop();
     for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
     {
       const int num_send_groups = nbr_send_groups.RowSize(nbr);
       if (num_send_groups > 0)
       {
         T *buf_start = buf;
-#ifdef __NVCC__
         T *d_buf_start = d_buf;
-#endif
         const int *grp_list = nbr_send_groups.GetRow(nbr);
         for (int i = 0; i < num_send_groups; i++)
         {
@@ -192,25 +169,20 @@ namespace mfem {
           d_buf = d_CopyGroupToBuffer(d_ldata, d_buf, grp_list[i], 2);
           buf += d_buf - d_buf_ini;
         }
-#ifdef __NVCC__
         if (!rconfig::Get().Aware()){
-          push(BcastBegin:DtoH,Red); 
-          checkCudaErrors(cuMemcpyDtoH(buf_start,
-                                       (CUdeviceptr)d_buf_start,
-                                       (buf-buf_start)*sizeof(T)));
+          push(BcastBegin:DtoH,Red);
+          rmemcpy::rDtoH(buf_start,d_buf_start,(buf-buf_start)*sizeof(T));
           pop();
         }
         
         // make sure the device has finished
         if (rconfig::Get().Aware()){
           push(sync,Lime);
-          cudaStreamSynchronize(0);
+          cudaStreamSynchronize(0);//*rconfig::Get().Stream());
           pop();
         }
-#endif
 
         push(MPI_Isend,Orange);
-#ifdef __NVCC__
         if (rconfig::Get().Aware())
           MPI_Isend(d_buf_start,
                     buf - buf_start,
@@ -220,7 +192,6 @@ namespace mfem {
                     gtopo.GetComm(),
                     &requests[request_counter]);
         else
-#endif
           MPI_Isend(buf_start,
                     buf - buf_start,
                     MPITypeMap<T>::mpi_type,
@@ -304,19 +275,13 @@ namespace mfem {
         {
           recv_size += group_ldof.RowSize(grp_list[i]);
         }
-#ifndef __NVCC__
-        const T *d_buf = (T*)group_buf.GetData() + buf_offsets[nbr];
-#else
         const T *buf = (T*)group_buf.GetData() + buf_offsets[nbr];
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
         if (!rconfig::Get().Aware()){
           push(BcastEnd:HtoD,Red);
-          checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
-                                       buf,
-                                       recv_size*sizeof(T)));
+          rmemcpy::rHtoD((void*)d_buf,buf,recv_size*sizeof(T));
           pop();
         }
-#endif
         for (int i = 0; i < num_recv_groups; i++)
         {
           d_buf = d_CopyGroupFromBuffer(d_buf, d_ldata, grp_list[i], layout);
@@ -343,15 +308,9 @@ namespace mfem {
     int request_counter = 0;
     group_buf.SetSize(group_buf_size*sizeof(T));
     T *buf = (T *)group_buf.GetData();
-#ifdef __NVCC__
-    if (!d_group_buf){
-      dbg("\n\033[31;1m[%d-d_ReduceBegin] d_buf cuMemAlloc\033[m",rnk);
-      checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_group_buf,group_buf_size*sizeof(T)));
-    }
+    if (!d_group_buf)
+      d_group_buf = rmalloc<T>::operator new(group_buf_size);
     T *d_buf = (T*)d_group_buf;
-#else
-    T *d_buf = (T*)d_buf;
-#endif
     for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
     {
       const int num_send_groups = nbr_recv_groups.RowSize(nbr);
@@ -365,23 +324,17 @@ namespace mfem {
           buf += d_buf - d_buf_ini;
         }
         dbg("\033[33;1m[%d-d_ReduceBegin] MPI_Isend",rnk);
-#ifdef __NVCC__
         if (!rconfig::Get().Aware()){
           push(ReduceBegin:DtoH,Red);
-          checkCudaErrors(cuMemcpyDtoH(buf_start,
-                                       (CUdeviceptr)d_buf_start,
-                                       (buf-buf_start)*sizeof(T)));
+          rmemcpy::rDtoH(buf_start,d_buf_start,(buf-buf_start)*sizeof(T));
           pop();
         }
-        
         // make sure the device has finished
         if (rconfig::Get().Aware()){
           push(sync,Lime);
-          cudaStreamSynchronize(0);
+          cudaStreamSynchronize(0);//*rconfig::Get().Stream());
           pop();
         }
-#endif
-       
         push(MPI_Isend,Orange);
         if (rconfig::Get().Aware())
           MPI_Isend(d_buf_start,
@@ -474,19 +427,13 @@ namespace mfem {
         for (int i = 0; i < num_recv_groups; i++)
           recv_size += group_ldof.RowSize(grp_list[i]);
         const T *buf = (T*)group_buf.GetData() + buf_offsets[nbr];
-#ifdef __NVCC__
         assert(d_group_buf);
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
         if (!rconfig::Get().Aware()){
           push(ReduceEnd:HtoD,Red);
-          checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
-                                       buf,
-                                       recv_size*sizeof(T)));
+          rmemcpy::rHtoD((void*)d_buf,buf,recv_size*sizeof(T));
           pop();
         }
-#else
-        const T *d_buf = buf;
-#endif       
         for (int i = 0; i < num_recv_groups; i++)
         {
           d_buf = d_ReduceGroupFromBuffer(d_buf, d_ldata, grp_list[i], layout, Op);
@@ -500,16 +447,21 @@ namespace mfem {
   }
 
   // ***************************************************************************
-  // * instantiate RajaCommD::Bcast and Reduce for int and double
+  // * instantiate RajaCommD::Bcast and Reduce for doubles
   // ***************************************************************************
-  template void RajaCommD::d_BcastBegin<int>(int*, int);
-  template void RajaCommD::d_BcastEnd<int>(int*, int);
-  template void RajaCommD::d_ReduceBegin<int>(const int*);
-  template void RajaCommD::d_ReduceEnd<int>(int*,int,void (*)(OpData<int>));
-
   template void RajaCommD::d_BcastBegin<double>(double*, int);
   template void RajaCommD::d_BcastEnd<double>(double*, int);
   template void RajaCommD::d_ReduceBegin<double>(const double *);
   template void RajaCommD::d_ReduceEnd<double>(double*,int,void (*)(OpData<double>));
+#else // __NVCC__
+  template <class T> void RajaCommD::d_ReduceBegin(const T*) {}
+  template <class T> void RajaCommD::d_ReduceEnd(T*,int,void (*Op)(OpData<T>)){}
+  template <class T> void RajaCommD::d_BcastBegin(T*, int) {}
+  template <class T> void RajaCommD::d_BcastEnd(T*, int) {}
+  template void RajaCommD::d_BcastBegin<double>(double*, int);
+  template void RajaCommD::d_BcastEnd<double>(double*, int);
+  template void RajaCommD::d_ReduceBegin<double>(const double *);
+  template void RajaCommD::d_ReduceEnd<double>(double*,int,void (*)(OpData<double>));
+#endif // __NVCC__
 
 } // namespace mfem

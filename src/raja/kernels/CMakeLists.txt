@@ -8,6 +8,7 @@ blt_add_library(
   blas/vector_min.cpp
   blas/vector_neg.cpp
   blas/vector_op_eq.cpp
+  blas/vector_op_eq_d.cu
   blas/vector_set_subvector.cpp
   blas/vector_set_subvector_const.cpp
   blas/vector_vec_add.cpp
