@@ -16,6 +16,17 @@
 #ifndef LAGHOS_RAJA_MALLOC
 #define LAGHOS_RAJA_MALLOC
 
+#include "umpire/config.hpp"
+#include "umpire/ResourceManager.hpp"
+#include "umpire/Allocator.hpp"
+#include "umpire/util/Exception.hpp"
+#include "umpire/op/MemoryOperationRegistry.hpp"
+#include "umpire/op/MemoryOperation.hpp"
+#include "umpire/strategy/AllocationStrategy.hpp"
+#include "umpire/util/Platform.hpp"
+#include <signal.h>
+
+
 namespace mfem {
 
   // ***************************************************************************
@@ -24,13 +35,18 @@ namespace mfem {
     // *************************************************************************
     inline void* operator new(size_t n, bool lock_page = false) {
       dbg("+]\033[m");
+      auto &rm = umpire::ResourceManager::getInstance();
+      umpire::Allocator host_allocator = rm.getAllocator("HOST");
+      umpire::Allocator device_allocator = rm.getAllocator("DEVICE");
+
       if (!rconfig::Get().Cuda()) return ::new T[n];
 #ifdef __NVCC__
       void *ptr;
       push(new,Purple);
       if (!rconfig::Get().Uvm()){
         if (lock_page) cuMemHostAlloc(&ptr, n*sizeof(T), CU_MEMHOSTALLOC_PORTABLE);
-        else cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
+        //else cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
+        else ptr = static_cast<void*>(device_allocator.allocate(n*sizeof(T)));
       }else{
         cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
       }
@@ -47,14 +63,37 @@ namespace mfem {
     // ***************************************************************************
     inline void operator delete(void *ptr) {
       dbg("-]\033[m");
+      auto &rm = umpire::ResourceManager::getInstance();
+      umpire::Allocator host_allocator = rm.getAllocator("HOST");
+      umpire::Allocator device_allocator = rm.getAllocator("DEVICE");
+
       if (!rconfig::Get().Cuda()) {
-        if (ptr)
-          ::delete[] static_cast<T*>(ptr);
-      }
+        if (ptr) {
+          try {
+            host_allocator.deallocate(ptr);
+          }
+          catch(...) {  
+            ::delete[] static_cast<T*>(ptr);
+          }  
+        }
+        else {
+          printf("Requesting delete of host side nil pointer\n");
+        }
+      }  
 #ifdef __NVCC__
       else {
         push(delete,Fuchsia);
-        cuMemFree((CUdeviceptr)ptr); // or cuMemFreeHost if page_locked was used
+        if(ptr) {
+          try {
+            device_allocator.deallocate(ptr);
+          }
+          catch(...) {
+            cuMemFree((CUdeviceptr)ptr);
+          }
+        }
+        else{
+          printf("Requesting delete of device side nil pointer\n");
+        }  
         pop();
       }
 #endif // __NVCC__

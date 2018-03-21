@@ -33,8 +33,15 @@ namespace mfem {
     assert(src); assert(dest);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,bytes);
 #ifdef __NVCC__
-    if (!rconfig::Get().Uvm())
-      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)dest,src,bytes));
+    if (!rconfig::Get().Uvm()) {
+        umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+        auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+        auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+        auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+        auto op = op_registry.find("COPY",host_strat,device_strat);
+        op->transform((void*)src,(void*)dest, nullptr, nullptr,bytes);
+        //checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)dest,src,bytes));
+    }  
     else checkCudaErrors(cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes));
 #endif
     return dest;
@@ -47,8 +54,15 @@ namespace mfem {
     assert(src); assert(dest);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,bytes);
 #ifdef __NVCC__
-    if (!rconfig::Get().Uvm())
-      checkCudaErrors(cuMemcpyDtoH(dest,(CUdeviceptr)src,bytes));
+    if (!rconfig::Get().Uvm()) {
+      umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+      auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+      auto host_strat = rm.getAllocator("HOST").getAllocationStrategy();
+      auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+      auto op = op_registry.find("COPY",device_strat,host_strat);
+      op->transform((void*)src,(void*)dest, nullptr, nullptr,bytes);
+      //checkCudaErrors(cuMemcpyDtoH(dest,(CUdeviceptr)src,bytes));
+    }  
     else checkCudaErrors(cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes));
 #endif
     return dest;
@@ -62,8 +76,14 @@ namespace mfem {
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,bytes);
 #ifdef __NVCC__
     if (!rconfig::Get().Uvm()){
-      if (!async)
-        checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,bytes));
+      if (!async) {
+        umpire::ResourceManager& rm = umpire::ResourceManager::getInstance();
+        auto &op_registry = umpire::op::MemoryOperationRegistry::getInstance();
+        auto device_strat = rm.getAllocator("DEVICE").getAllocationStrategy();
+        auto op = op_registry.find("COPY",device_strat, device_strat);
+        op->transform((void*)src,(void*)dest, nullptr, nullptr,bytes);
+        //checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,bytes));
+      }  
       else{
         const CUstream s = *rconfig::Get().Stream();
         checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)dest,(CUdeviceptr)src,bytes,s));

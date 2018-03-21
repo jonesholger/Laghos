@@ -16,6 +16,9 @@
 #ifndef LAGHOS_RAJA_ARRAY
 #define LAGHOS_RAJA_ARRAY
 
+#include "../raja.hpp"
+#include "rmalloc.hpp"
+
 namespace mfem {
 
 template <class T, bool xyz = true> class RajaArray;

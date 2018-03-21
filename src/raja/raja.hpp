@@ -77,8 +77,7 @@
 #include "umpire/op/MemoryOperation.hpp"
 #include "umpire/strategy/AllocationStrategy.hpp"
 #include "umpire/util/Platform.hpp"
-
-
+#include <signal.h>
 
 #endif // LAGHOS_RAJA
 
