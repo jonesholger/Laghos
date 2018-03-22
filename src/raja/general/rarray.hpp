@@ -17,7 +17,6 @@
 #define LAGHOS_RAJA_ARRAY
 
 #include "../raja.hpp"
-#include "rmalloc.hpp"
 
 namespace mfem {
 
