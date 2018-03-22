@@ -22,7 +22,7 @@ template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
-         const int H1_DOFS_1D> kernel
+         const int H1_DOFS_1D> kernel__
 #endif
 static void rForceMult2D(
 #ifndef __TEMPLATES__
@@ -111,7 +111,7 @@ template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
-         const int H1_DOFS_1D> kernel
+         const int H1_DOFS_1D> kernel__
 #endif
 static void rForceMultTranspose2D(
 #ifndef __TEMPLATES__
@@ -212,7 +212,7 @@ template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
-         const int H1_DOFS_1D> kernel
+         const int H1_DOFS_1D> kernel__
 #endif
 void rForceMult3D(
 #ifndef __TEMPLATES__
@@ -343,7 +343,7 @@ template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
-         const int H1_DOFS_1D> kernel
+         const int H1_DOFS_1D> kernel__
 #endif
 static void rForceMultTranspose3D(
 #ifndef __TEMPLATES__

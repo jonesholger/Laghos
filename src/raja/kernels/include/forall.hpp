@@ -27,7 +27,7 @@
 //#warning RAJA, WITH NVCC
 #define sync
 #define share
-#define kernel
+#define kernel__
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
@@ -54,7 +54,7 @@ const int CUDA_BLOCK_SIZE = 256;
 #else // __KERNELS__ on GPU, CUDA Kernel launches  *****************************
 #ifdef __NVCC__
 #ifndef __LAMBDA__
-#define kernel __global__
+#define kernel__ __global__
 #define share __shared__
 #define sync __syncthreads();
 const int CUDA_BLOCK_SIZE = 256;
@@ -77,7 +77,7 @@ const int CUDA_BLOCK_SIZE = 256;
 
 // *****************************************************************************
 #else // __KERNELS__ on GPU, LAMBDA launches  **********************************
-#define kernel
+#define kernel__
 #define sync
 #define share
 template <typename FORALL_BODY>

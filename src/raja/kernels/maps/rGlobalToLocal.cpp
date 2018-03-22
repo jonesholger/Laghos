@@ -16,7 +16,7 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
-extern "C" kernel
+extern "C" kernel__
 void rGlobalToLocal0(const int globalEntries,
                      const int NUM_VDIM,
                      const bool VDIM_ORDERING,                     

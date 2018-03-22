@@ -20,7 +20,7 @@
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D> kernel
+         const int NUM_DOFS_1D> kernel__
 #endif
 void rUpdateQuadratureData2D(
 #ifndef __TEMPLATES__
@@ -196,7 +196,7 @@ void rUpdateQuadratureData2D(
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D> kernel
+         const int NUM_DOFS_1D> kernel__
 #endif
 void rUpdateQuadratureData3D(
 #ifndef __TEMPLATES__

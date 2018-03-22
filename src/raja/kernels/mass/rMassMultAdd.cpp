@@ -22,7 +22,7 @@ using namespace RAJA;
 // *****************************************************************************
 #ifdef __TEMPLATES__
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D> kernel__
 #endif
 void rMassMultAdd2D(
 #ifndef __TEMPLATES__
@@ -99,6 +99,12 @@ void rMassMultAdd2D(
 
 using namespace RAJA::statement;
 
+RAJA_INDEX_VALUE(ELEM, "ELEM");
+RAJA_INDEX_VALUE(NUM_QD_1D, "NUM_QD_1D");
+RAJA_INDEX_VALUE(NUM_THREADS, "NUM_THREADS");
+RAJA_INDEX_VALUE(NUM_Q_2D, "NUM_Q_2D");
+
+
 using Pol1 = RAJA::KernelPolicy<
           CudaKernel<
             For<0, cuda_threadblock_exec<64>, 
@@ -108,7 +114,7 @@ using Pol1 = RAJA::KernelPolicy<
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D> kernel__
 void rMassMultAdd2DNested1(
                     const int numElements,
                     const double* restrict dofToQuad,
@@ -119,11 +125,15 @@ void rMassMultAdd2DNested1(
                     const double* restrict solIn,
                     double* restrict solOut) {
 
-  //forall(e,numElements,
-  //printf("rMassMultAdd2DNested NUM_DOFS_1D = %d  NUM_QUAD_1D = %d\n",NUM_DOFS_1D, NUM_QUAD_1D);
-  kernel_param<Pol1>(
-    RAJA::make_tuple(RangeSegment(0,numElements)),
-    [=] __device__(int e) 
+  auto segments = camp::make_tuple(
+    TypedRangeSegment<ELEM>(0,numElements)
+  );
+
+  kernel<Pol1>(
+
+    segments,
+
+    [=] RAJA_HOST_DEVICE (ELEM e) 
     {
       double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -137,7 +147,7 @@ void rMassMultAdd2DNested1(
           sol_x[qy] = 0.0;
         }
         for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
-          const double s = solIn[ijkN(dx,dy,e,NUM_DOFS_1D)];
+          const double s = solIn[ijkN(dx,dy,(int)*e,NUM_DOFS_1D)];
           for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
             sol_x[qx] += dofToQuad[ijN(qx,dx,NUM_QUAD_1D)]* s;
           }
@@ -151,7 +161,7 @@ void rMassMultAdd2DNested1(
       }
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-          sol_xy[qy][qx] *= oper[ijkN(qx,qy,e,NUM_QUAD_1D)];
+          sol_xy[qy][qx] *= oper[ijkN(qx,qy,(int)*e,NUM_QUAD_1D)];
         }
       }
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -168,7 +178,7 @@ void rMassMultAdd2DNested1(
         for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
           const double q2d = quadToDof[ijN(dy,qy,NUM_DOFS_1D)];
           for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
-            solOut[ijkN(dx,dy,e,NUM_DOFS_1D)] += q2d * sol_x[dx];
+            solOut[ijkN(dx,dy,(int)*e,NUM_DOFS_1D)] += q2d * sol_x[dx];
           }
         }
       }
@@ -177,10 +187,6 @@ void rMassMultAdd2DNested1(
 }
 
 
-RAJA_INDEX_VALUE(ELEM, "ELEM");
-RAJA_INDEX_VALUE(NUM_QD_1D, "NUM_QD_1D");
-RAJA_INDEX_VALUE(NUM_THREADS, "NUM_THREADS");
-RAJA_INDEX_VALUE(NUM_Q_2D, "NUM_Q_2D");
 
 using Pol2 = RAJA::KernelPolicy<
           CudaKernel<
@@ -195,7 +201,7 @@ using Pol2 = RAJA::KernelPolicy<
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D> kernel__
 void rMassMultAdd2DNested2(
                     const int numElements,
                     const double* restrict dofToQuad,
@@ -292,7 +298,7 @@ void rMassMultAdd2DNested2(
 }
 
 
-#if 0
+#if 1
 
 using Pol3 = RAJA::KernelPolicy<
           CudaKernel<
@@ -310,7 +316,7 @@ using Pol3 = RAJA::KernelPolicy<
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D> kernel__
 void rMassMultAdd2DNested3(
                     const int numElements,
                     const double* restrict dofToQuad,
@@ -323,7 +329,7 @@ void rMassMultAdd2DNested3(
 
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
-  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+  //const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
 
   auto segments = camp::make_tuple(
     TypedRangeSegment<ELEM>(0,numElements),
@@ -332,29 +338,31 @@ void rMassMultAdd2DNested3(
     TypedRangeSegment<NUM_Q_2D>(0,NUM_QUAD_2D)
   );
 
-  using shmemDofQuadMap_t = SharedMemory<cuda_shmem, double,NUM_QUAD_DOFS_1D>;
-  using shmemSXY_t = SharedMemory<cuda_shmem, double, NUM_QUAD_2D * 64>; //shmem for sol_xy for each e in local block
-  ShmemWindowView<shmemDofQuadMap_t,ArgList<1>,SizeList<NUM_QUAD_DOFS_1D>,decltype(segments)> shmDof2Quad; 
-  ShmemWindowView<shmemDofQuadMap_t,ArgList<1>,SizeList<NUM_QUAD_DOFS_1D>,decltype(segments)> shmQuad2Dof;
-  ShmemWindowView<shmemSXY_t,ArgList<2,3>,SizeList<64,NUM_QUAD_2D>,decltype(segments)> shmSXY;
+  using shmemDofQuadMap_t = ShmemTile<cuda_shmem, double,ArgList<1>, SizeList<NUM_QUAD_DOFS_1D>, decltype(segments)>;
+  using shmemSXY_t = ShmemTile<cuda_shmem, double, ArgList<2,3>, SizeList<64,NUM_QUAD_2D>, decltype(segments)>; //shmem for sol_xy for each e in local block
+  shmemDofQuadMap_t shmDof2Quad; 
+  shmemDofQuadMap_t shmQuad2Dof;
+  shmemSXY_t shmSXY;
 
   //printf("rMassMultAdd2DNested NUM_DOFS_1D = %d  NUM_QUAD_1D = %d\n",NUM_DOFS_1D, NUM_QUAD_1D);
-  kernel<Pol3>(
+  kernel_param<Pol3>(
     segments, 
 
+    RAJA::make_tuple(shmDof2Quad, shmQuad2Dof, shmSXY, 0.0),
 
-    [=] __device__(ELEM e, NUM_QD_1D qd , NUM_THREADS t, NUM_Q_2D qd2)
+
+    [=] __device__(ELEM e, NUM_QD_1D qd , NUM_THREADS t, NUM_Q_2D qd2, shmemDofQuadMap_t shmDof2Quad, shmemDofQuadMap_t shmQuad2Dof, shmemSXY_t shmSXY, double &)
     {
       shmDof2Quad(qd) = dofToQuad[(int)*qd];
       shmQuad2Dof(qd) = quadToDof[(int)*qd];    
     },
 
-    [=] __device__(ELEM e, NUM_QD_1D qd , NUM_THREADS t, NUM_Q_2D qd2)
+    [=] __device__(ELEM e, NUM_QD_1D qd , NUM_THREADS t, NUM_Q_2D qd2, shmemDofQuadMap_t shmDof2Quad, shmemDofQuadMap_t shmQuad2Dof, shmemSXY_t shmSXY, double &)
     {
       shmSXY(t,qd2) = 0.0;
     },
 
-    [=] __device__ (ELEM e, NUM_QD_1D qd, NUM_THREADS t, NUM_Q_2D qd2) 
+    [=] __device__ (ELEM e, NUM_QD_1D qd , NUM_THREADS t, NUM_Q_2D qd2, shmemDofQuadMap_t shmDof2Quad, shmemDofQuadMap_t shmQuad2Dof, shmemSXY_t shmSXY, double &) 
     {
  //     double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
  //     for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -421,7 +429,7 @@ void rMassMultAdd2DNested3(
 // *****************************************************************************
 #ifdef __TEMPLATES__
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D> kernel__
 #endif
 void rMassMultAdd3D(
 #ifndef __TEMPLATES__
@@ -569,7 +577,7 @@ void rMassMultAdd(const int DIM,
     // 2D
     {0x20001,&rMassMultAdd2D<1,2>},    {0x20101,&rMassMultAdd2D<2,2>},
     {0x20102,&rMassMultAdd2D<2,4>},    {0x20202,&rMassMultAdd2D<3,4>},
-    {0x20203,&rMassMultAdd2DNested2<3,6>},    {0x20303,&rMassMultAdd2DNested2<4,6>},
+    {0x20203,&rMassMultAdd2DNested1<3,6>},    {0x20303,&rMassMultAdd2DNested1<4,6>},
     {0x20304,&rMassMultAdd2D<4,8>},    {0x20404,&rMassMultAdd2D<5,8>},
     {0x20405,&rMassMultAdd2D<5,10>},   {0x20505,&rMassMultAdd2D<6,10>},
     {0x20506,&rMassMultAdd2D<6,12>},   {0x20606,&rMassMultAdd2D<7,12>},

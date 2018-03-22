@@ -17,7 +17,7 @@
 
 // *****************************************************************************
 #ifdef __TEMPLATES__
-kernel
+kernel__
 #endif
 void rNodeCopyByVDim0(const int elements,
                       const int numDofs,
@@ -69,7 +69,7 @@ void rNodeCopyByVDim(const int elements,
 // *****************************************************************************
 #ifdef __TEMPLATES__
 template<const int NUM_DOFS,
-         const int NUM_QUAD> kernel
+         const int NUM_QUAD> kernel__
 #endif
 void rIniGeom1D(
 #ifndef __TEMPLATES__
@@ -114,7 +114,7 @@ void rIniGeom1D(
 // *****************************************************************************
 #ifdef __TEMPLATES__
 template<const int NUM_DOFS,
-         const int NUM_QUAD> kernel
+         const int NUM_QUAD> kernel__
 #endif
 void rIniGeom2D(
 #ifndef __TEMPLATES__
@@ -173,7 +173,7 @@ void rIniGeom2D(
 // *****************************************************************************
 #ifdef __TEMPLATES__
 template<const int NUM_DOFS,
-         const int NUM_QUAD> kernel
+         const int NUM_QUAD> kernel__
 #endif
 void rIniGeom3D(
 #ifndef __TEMPLATES__

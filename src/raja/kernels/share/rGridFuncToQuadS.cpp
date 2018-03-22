@@ -19,7 +19,7 @@
 #ifdef __TEMPLATES__
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D> kernel__
 #endif
 void rGridFuncToQuad2S(
 #ifndef __TEMPLATES__

@@ -18,7 +18,7 @@
 
 // *****************************************************************************
 #ifdef __TEMPLATES__
-template<const int NUM_QUAD> kernel
+template<const int NUM_QUAD> kernel__
 #endif
 void rInitQuadData(
 #ifndef __TEMPLATES__

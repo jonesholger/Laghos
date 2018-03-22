@@ -17,7 +17,7 @@
 
 #ifndef __LAMBDA__
 // *****************************************************************************
-extern "C" kernel void vector_op_eq0(const int N,
+extern "C" kernel__ void vector_op_eq0(const int N,
                                      const double c0,
                                      double* __restrict v0){
   const int i = blockDim.x * blockIdx.x + threadIdx.x;

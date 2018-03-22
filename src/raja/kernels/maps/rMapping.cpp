@@ -17,7 +17,7 @@
 
 // *****************************************************************************
 #ifndef __LAMBDA__
-extern "C" kernel
+extern "C" kernel__
 void rSetSubVector0(const int N,
                     const int* indices,
                     const double* in,
@@ -41,7 +41,7 @@ void rSetSubVector(const int N,
 
 // *****************************************************************************
 #ifndef __LAMBDA__
-extern "C" kernel
+extern "C" kernel__
 void rMapSubVector0(const int N,
                     const int* indices,
                     const double* in,
@@ -74,7 +74,7 @@ void rMapSubVector(const int N,
 
 // *****************************************************************************
 #ifndef __LAMBDA__
-extern "C" kernel
+extern "C" kernel__
 void rExtractSubVector0(const int N,
                         const int* indices,
                         const double* in,

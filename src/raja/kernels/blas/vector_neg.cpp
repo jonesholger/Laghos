@@ -16,7 +16,7 @@
 #include "../raja.hpp"
 
 #ifndef __LAMBDA__
-extern "C" kernel
+extern "C" kernel__
 void vector_neg0(const int N,
                 double* __restrict vec) {
   const int i = blockDim.x * blockIdx.x + threadIdx.x;

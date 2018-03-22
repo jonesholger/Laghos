@@ -16,7 +16,7 @@
 #include "../raja.hpp"
 
 #ifndef __LAMBDA__
-extern "C" kernel
+extern "C" kernel__
 void vector_clear_dofs0(const int N,
                        double* __restrict v0,
                        const int* __restrict v1) {

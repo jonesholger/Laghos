@@ -16,7 +16,7 @@
 #include "../raja.hpp"
 
 #ifndef __LAMBDA__
-extern "C" kernel
+extern "C" kernel__
 void vector_set_subvector0(const int N,
                            double* __restrict v0,
                            const double* __restrict v1,

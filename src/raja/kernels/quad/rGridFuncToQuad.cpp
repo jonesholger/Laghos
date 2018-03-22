@@ -19,7 +19,7 @@
 #ifdef __TEMPLATES__
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D> kernel__
 #endif
 void rGridFuncToQuad1D(
 #ifndef __TEMPLATES__
@@ -69,7 +69,7 @@ void rGridFuncToQuad1D(
 #ifdef __TEMPLATES__
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D> kernel__
 #endif
 void rGridFuncToQuad2D(
 #ifndef __TEMPLATES__
@@ -139,7 +139,7 @@ void rGridFuncToQuad2D(
 #ifdef __TEMPLATES__
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D> kernel__
 #endif
 void rGridFuncToQuad3D(
 #ifndef __TEMPLATES__
