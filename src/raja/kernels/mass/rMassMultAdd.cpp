@@ -103,6 +103,7 @@ RAJA_INDEX_VALUE(ELEM, "ELEM");
 RAJA_INDEX_VALUE(NUM_QD_1D, "NUM_QD_1D");
 RAJA_INDEX_VALUE(NUM_THREADS, "NUM_THREADS");
 RAJA_INDEX_VALUE(NUM_Q_2D, "NUM_Q_2D");
+RAJA_INDEX_VALUE(NUM_MAX, "NUM_MAX");
 
 
 using Pol1 = RAJA::KernelPolicy<
@@ -189,7 +190,7 @@ void rMassMultAdd2DNested1(
 
 
 using Pol2 = RAJA::KernelPolicy<
-          CudaKernel<
+          CudaKernelAsync<
             SetShmemWindow<
               For<1, cuda_thread_exec, Lambda<0>>// NUM_QUAD_DOFS_1D
             >,  
@@ -238,10 +239,14 @@ void rMassMultAdd2DNested2(
     {
       shmDof2Quad(qd) = dofToQuad[(int)*qd];
       shmQuad2Dof(qd) = quadToDof[(int)*qd];    
+      //int block = blockIdx.x;
+      //if(block == 0) printf("shmDof2Quad(%d) = %f, shmQuad2Dof(%d) = %f\n",(int)*qd,shmDof2Quad(qd),(int)*qd,shmQuad2Dof(qd));
     },
 
-    [=] RAJA_HOST_DEVICE(ELEM e, NUM_QD_1D qd, shmemDofQuadMap_t shmDof2Quad, shmemDofQuadMap_t shmQuad2Dof, double &) 
+    [=] __device__(ELEM e, NUM_QD_1D qd, shmemDofQuadMap_t shmDof2Quad, shmemDofQuadMap_t shmQuad2Dof, double &) 
     {
+      int thread = threadIdx.x;
+      int block = blockIdx.x;
       double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
@@ -271,6 +276,7 @@ void rMassMultAdd2DNested2(
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
           sol_xy[qy][qx] *= oper[ijkN(qx,qy,(int)*e,NUM_QUAD_1D)];
+          //if(thread == 0 && block == 0) printf("oper[ijkN(qx,qy,(int)*e,NUM_QUAD_1D)] = %f\n",oper[ijkN(qx,qy,(int)*e,NUM_QUAD_1D)]);
         }
       }
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -540,6 +546,141 @@ void rMassMultAdd3D(
 #endif
 }
 
+template<const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D> kernel__
+void rMassMultAdd3DNested2(
+                    const int numElements,
+                    const double* dofToQuad,
+                    const double* dofToQuadD,
+                    const double* quadToDof,
+                    const double* quadToDofD,
+                    const double* oper,
+                    const double* solIn,
+                    double* __restrict solOut) {
+
+  //const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
+
+  auto segments = camp::make_tuple(
+    TypedRangeSegment<ELEM>(0,numElements),
+    TypedRangeSegment<NUM_QD_1D>(0,NUM_QUAD_DOFS_1D)
+  );
+
+  using shmemDofQuadMap_t = ShmemTile<cuda_shmem, double,ArgList<1>,SizeList<NUM_QUAD_DOFS_1D>, decltype(segments)>;
+  shmemDofQuadMap_t shmDof2Quad; 
+  shmemDofQuadMap_t shmQuad2Dof;
+
+  kernel_param<Pol2>(
+
+    segments, 
+
+    RAJA::make_tuple(
+      shmDof2Quad,
+      shmQuad2Dof,
+      0.0), 
+
+    [=] __device__(ELEM e, NUM_QD_1D qd, shmemDofQuadMap_t shmDof2Quad, shmemDofQuadMap_t shmQuad2Dof,  double &)
+    {
+      shmDof2Quad(qd) = dofToQuad[(int)*qd];
+      shmQuad2Dof(qd) = quadToDof[(int)*qd];    
+    },
+
+    [=] RAJA_HOST_DEVICE(ELEM e, NUM_QD_1D qd, shmemDofQuadMap_t shmDof2Quad, shmemDofQuadMap_t shmQuad2Dof, double &) 
+    {
+      double sol_xyz[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
+      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            sol_xyz[qz][qy][qx] = 0;
+          }
+        }
+      }
+      for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
+        double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            sol_xy[qy][qx] = 0;
+          }
+        }
+        for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+          double sol_x[NUM_QUAD_1D];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            sol_x[qx] = 0;
+          }
+          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+            const double s = solIn[ijklN(dx,dy,dz,(int)*e,NUM_DOFS_1D)];
+            for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+              //sol_x[qx] += dofToQuad[ijN(qx,dx,NUM_QUAD_1D)] * s;
+              sol_x[qx] += shmDof2Quad(convertIndex<NUM_QD_1D, int>(ijN(qx,dx,NUM_QUAD_1D))) * s;
+            }
+          }
+          for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+            //const double wy = dofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+            const double wy = shmDof2Quad(convertIndex<NUM_QD_1D, int>(ijN(qy,dy,NUM_QUAD_1D)));
+            for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+              sol_xy[qy][qx] += wy * sol_x[qx];
+            }
+          }
+        }
+        for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+          //const double wz = dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];
+          const double wz = shmDof2Quad(convertIndex<NUM_QD_1D, int>(ijN(qz,dz,NUM_QUAD_1D)));
+          for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+            for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+              sol_xyz[qz][qy][qx] += wz * sol_xy[qy][qx];
+            }
+          }
+        }
+      }
+      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            sol_xyz[qz][qy][qx] *= oper[ijklN(qx,qy,qz,(int)*e,NUM_QUAD_1D)];
+          }
+        }
+      }
+      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+        double sol_xy[NUM_DOFS_1D][NUM_DOFS_1D];
+        for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+            sol_xy[dy][dx] = 0;
+          }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          double sol_x[NUM_DOFS_1D];
+          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+            sol_x[dx] = 0;
+          }
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            const double s = sol_xyz[qz][qy][qx];
+            for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+              //sol_x[dx] += quadToDof[ijN(dx,qx,NUM_DOFS_1D)] * s;
+              sol_x[dx] += shmQuad2Dof(convertIndex<NUM_QD_1D, int>(ijN(dx,qx,NUM_DOFS_1D))) * s;
+            }
+          }
+          for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+            //const double wy = quadToDof[ijN(dy,qy,NUM_DOFS_1D)];
+            const double wy = shmQuad2Dof(convertIndex<NUM_QD_1D, int>(ijN(dy,qy,NUM_DOFS_1D)));
+            for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+              sol_xy[dy][dx] += wy * sol_x[dx];
+            }
+          }
+        }
+        for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
+          //const double wz = quadToDof[ijN(dz,qz,NUM_DOFS_1D)];
+          const double wz = shmQuad2Dof(convertIndex<NUM_QD_1D, int>(ijN(dz,qz,NUM_DOFS_1D)));
+          for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+            for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+              solOut[ijklN(dx,dy,dz,(int)*e,NUM_DOFS_1D)] += wz * sol_xy[dy][dx];
+            }
+          }
+        }
+      }
+    }
+  );
+}
+
+
 // *****************************************************************************
 typedef void (*fMassMultAdd)(const int numElements,
                              const double* dofToQuad,
@@ -575,39 +716,39 @@ void rMassMultAdd(const int DIM,
   const unsigned int id = (DIM<<16)|((NUM_DOFS_1D-1)<<8)|(NUM_QUAD_1D>>1);
   static std::unordered_map<unsigned int, fMassMultAdd> call = {
     // 2D
-    {0x20001,&rMassMultAdd2D<1,2>},    {0x20101,&rMassMultAdd2D<2,2>},
-    {0x20102,&rMassMultAdd2D<2,4>},    {0x20202,&rMassMultAdd2D<3,4>},
-    {0x20203,&rMassMultAdd2DNested1<3,6>},    {0x20303,&rMassMultAdd2DNested1<4,6>},
-    {0x20304,&rMassMultAdd2D<4,8>},    {0x20404,&rMassMultAdd2D<5,8>},
-    {0x20405,&rMassMultAdd2D<5,10>},   {0x20505,&rMassMultAdd2D<6,10>},
-    {0x20506,&rMassMultAdd2D<6,12>},   {0x20606,&rMassMultAdd2D<7,12>},
-    {0x20607,&rMassMultAdd2D<7,14>},   {0x20707,&rMassMultAdd2D<8,14>},
-    {0x20708,&rMassMultAdd2D<8,16>},   {0x20808,&rMassMultAdd2D<9,16>},
-    {0x20809,&rMassMultAdd2D<9,18>},   {0x20909,&rMassMultAdd2D<10,18>},
-    {0x2090A,&rMassMultAdd2D<10,20>},  {0x20A0A,&rMassMultAdd2D<11,20>},
-    {0x20A0B,&rMassMultAdd2D<11,22>},  {0x20B0B,&rMassMultAdd2D<12,22>},
-    {0x20B0C,&rMassMultAdd2D<12,24>},  {0x20C0C,&rMassMultAdd2D<13,24>},
-    {0x20C0D,&rMassMultAdd2D<13,26>},  {0x20D0D,&rMassMultAdd2D<14,26>},
-    {0x20D0E,&rMassMultAdd2D<14,28>},  {0x20E0E,&rMassMultAdd2D<15,28>},
-    {0x20E0F,&rMassMultAdd2D<15,30>},  {0x20F0F,&rMassMultAdd2D<16,30>},
-    {0x20F10,&rMassMultAdd2D<16,32>},  {0x21010,&rMassMultAdd2D<17,32>},
+    {0x20001,&rMassMultAdd2DNested2<1,2>},    {0x20101,&rMassMultAdd2DNested2<2,2>},
+    {0x20102,&rMassMultAdd2DNested2<2,4>},    {0x20202,&rMassMultAdd2DNested2<3,4>},
+    {0x20203,&rMassMultAdd2DNested2<3,6>},    {0x20303,&rMassMultAdd2DNested2<4,6>},
+    {0x20304,&rMassMultAdd2DNested2<4,8>},    {0x20404,&rMassMultAdd2DNested2<5,8>},
+    {0x20405,&rMassMultAdd2DNested2<5,10>},   {0x20505,&rMassMultAdd2DNested2<6,10>},
+    {0x20506,&rMassMultAdd2DNested2<6,12>},   {0x20606,&rMassMultAdd2DNested2<7,12>},
+    {0x20607,&rMassMultAdd2DNested2<7,14>},   {0x20707,&rMassMultAdd2DNested2<8,14>},
+    {0x20708,&rMassMultAdd2DNested2<8,16>},   {0x20808,&rMassMultAdd2DNested2<9,16>},
+    {0x20809,&rMassMultAdd2DNested2<9,18>},   {0x20909,&rMassMultAdd2DNested2<10,18>},
+    {0x2090A,&rMassMultAdd2DNested2<10,20>},  {0x20A0A,&rMassMultAdd2DNested2<11,20>},
+    {0x20A0B,&rMassMultAdd2DNested2<11,22>},  {0x20B0B,&rMassMultAdd2DNested2<12,22>},
+    {0x20B0C,&rMassMultAdd2DNested2<12,24>},  {0x20C0C,&rMassMultAdd2DNested2<13,24>},
+    {0x20C0D,&rMassMultAdd2DNested2<13,26>},  {0x20D0D,&rMassMultAdd2DNested2<14,26>},
+    {0x20D0E,&rMassMultAdd2DNested2<14,28>},  {0x20E0E,&rMassMultAdd2DNested2<15,28>},
+    {0x20E0F,&rMassMultAdd2DNested2<15,30>},  {0x20F0F,&rMassMultAdd2DNested2<16,30>},
+    {0x20F10,&rMassMultAdd2DNested2<16,32>},  {0x21010,&rMassMultAdd2DNested2<17,32>},
     // 3D
-    {0x30001,&rMassMultAdd3D<1,2>},    {0x30101,&rMassMultAdd3D<2,2>},
-    {0x30102,&rMassMultAdd3D<2,4>},    {0x30202,&rMassMultAdd3D<3,4>},
-    {0x30203,&rMassMultAdd3D<3,6>},    {0x30303,&rMassMultAdd3D<4,6>},
-    {0x30304,&rMassMultAdd3D<4,8>},    {0x30404,&rMassMultAdd3D<5,8>},
-    {0x30405,&rMassMultAdd3D<5,10>},   {0x30505,&rMassMultAdd3D<6,10>},
-    {0x30506,&rMassMultAdd3D<6,12>},   {0x30606,&rMassMultAdd3D<7,12>},
-    {0x30607,&rMassMultAdd3D<7,14>},   {0x30707,&rMassMultAdd3D<8,14>},
-    {0x30708,&rMassMultAdd3D<8,16>},   {0x30808,&rMassMultAdd3D<9,16>},
-    {0x30809,&rMassMultAdd3D<9,18>},   {0x30909,&rMassMultAdd3D<10,18>},
-    {0x3090A,&rMassMultAdd3D<10,20>},  {0x30A0A,&rMassMultAdd3D<11,20>},
-    {0x30A0B,&rMassMultAdd3D<11,22>},  {0x30B0B,&rMassMultAdd3D<12,22>},
-    {0x30B0C,&rMassMultAdd3D<12,24>},  {0x30C0C,&rMassMultAdd3D<13,24>},
-    {0x30C0D,&rMassMultAdd3D<13,26>},  {0x30D0D,&rMassMultAdd3D<14,26>},
-    {0x30D0E,&rMassMultAdd3D<14,28>},  {0x30E0E,&rMassMultAdd3D<15,28>},
-    {0x30E0F,&rMassMultAdd3D<15,30>},  {0x30F0F,&rMassMultAdd3D<16,30>},
-    {0x30F10,&rMassMultAdd3D<16,32>},  {0x31010,&rMassMultAdd3D<17,32>},
+    {0x30001,&rMassMultAdd3DNested2<1,2>},    {0x30101,&rMassMultAdd3DNested2<2,2>},
+    {0x30102,&rMassMultAdd3DNested2<2,4>},    {0x30202,&rMassMultAdd3DNested2<3,4>},
+    {0x30203,&rMassMultAdd3DNested2<3,6>},    {0x30303,&rMassMultAdd3DNested2<4,6>},
+    {0x30304,&rMassMultAdd3DNested2<4,8>},    {0x30404,&rMassMultAdd3DNested2<5,8>},
+    {0x30405,&rMassMultAdd3DNested2<5,10>},   {0x30505,&rMassMultAdd3DNested2<6,10>},
+    {0x30506,&rMassMultAdd3DNested2<6,12>},   {0x30606,&rMassMultAdd3DNested2<7,12>},
+    {0x30607,&rMassMultAdd3DNested2<7,14>},   {0x30707,&rMassMultAdd3DNested2<8,14>},
+    {0x30708,&rMassMultAdd3DNested2<8,16>},   {0x30808,&rMassMultAdd3DNested2<9,16>},
+    {0x30809,&rMassMultAdd3DNested2<9,18>},   {0x30909,&rMassMultAdd3DNested2<10,18>},
+    {0x3090A,&rMassMultAdd3DNested2<10,20>},  {0x30A0A,&rMassMultAdd3DNested2<11,20>},
+    {0x30A0B,&rMassMultAdd3DNested2<11,22>},  {0x30B0B,&rMassMultAdd3DNested2<12,22>},
+    {0x30B0C,&rMassMultAdd3DNested2<12,24>},  {0x30C0C,&rMassMultAdd3DNested2<13,24>},
+    {0x30C0D,&rMassMultAdd3DNested2<13,26>},  {0x30D0D,&rMassMultAdd3DNested2<14,26>},
+    {0x30D0E,&rMassMultAdd3DNested2<14,28>},  {0x30E0E,&rMassMultAdd3DNested2<15,28>},
+    {0x30E0F,&rMassMultAdd3DNested2<15,30>},  {0x30F0F,&rMassMultAdd3DNested2<16,30>},
+    {0x30F10,&rMassMultAdd3DNested2<16,32>},  {0x31010,&rMassMultAdd3DNested2<17,32>},
   };
   if(!call[id]){
     printf("\n[rMassMultAdd] id \033[33m0x%X\033[m ",id);

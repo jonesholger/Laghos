@@ -16,6 +16,7 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
+#if 1
 extern "C" kernel__
 void rGlobalToLocal0(const int globalEntries,
                      const int NUM_VDIM,
@@ -33,7 +34,7 @@ void rGlobalToLocal0(const int globalEntries,
 #endif
   {
     const int offset = offsets[i];
-    const int nextOffset = offsets[i+1];
+    const int nextOffset = offsets[i+1]; 
     for (int v = 0; v < NUM_VDIM; ++v) {
       const int g_offset = ijNMt(v,i,NUM_VDIM,globalEntries,VDIM_ORDERING);
       const double dofValue = globalX[g_offset];
@@ -42,11 +43,70 @@ void rGlobalToLocal0(const int globalEntries,
         localX[l_offset] = dofValue;
       }
     }
+
   }
 #ifdef __LAMBDA__
          );
 #endif
 }
+
+#endif
+
+#if 0
+
+using namespace RAJA;
+
+using namespace RAJA::statement;
+
+RAJA_INDEX_VALUE(ENTRY, "ENTRY");
+
+
+using Pol1 = RAJA::KernelPolicy<
+          CudaKernelAsync<
+            For<0, cuda_threadblock_exec<128>, 
+            Lambda<0>>
+          >
+      >;    
+
+
+
+extern "C" kernel__
+void rGlobalToLocal0(const int globalEntries,
+                     const int NUM_VDIM,
+                     const bool VDIM_ORDERING,                     
+                     const int localEntries,
+                     const int* __restrict offsets,
+                     const int* __restrict indices,
+                     const double* __restrict globalX,
+                     double* __restrict localX) {
+  
+  auto segments = camp::make_tuple(
+    TypedRangeSegment<ENTRY>(0,globalEntries)
+  );
+
+  kernel<Pol1>(
+
+    segments,
+
+    [=] RAJA_HOST_DEVICE (ENTRY e) 
+    {
+      const int offset = offsets[(int)*e];
+      const int nextOffset = offsets[(int)*e+1]; 
+      //printf("offset %d nextOffset %d\n",offset,nextOffset);
+      for (int v = 0; v < NUM_VDIM; ++v) {
+        const int g_offset = ijNMt(v,(int)*e,NUM_VDIM,globalEntries,VDIM_ORDERING);
+        const double dofValue = globalX[g_offset];
+        for (int j = offset; j < nextOffset; ++j) {
+          const int l_offset = ijNMt(v,indices[j],NUM_VDIM,localEntries,VDIM_ORDERING);
+          localX[l_offset] = dofValue;
+        }
+      }
+    }
+  );
+}
+
+#endif
+
 void rGlobalToLocal(const int NUM_VDIM,
                     const bool VDIM_ORDERING,
                     const int globalEntries,
