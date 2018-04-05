@@ -15,6 +15,9 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
+#include "RAJA/RAJA.hpp"
+
+using namespace RAJA;
 
 // *****************************************************************************
 #ifdef __TEMPLATES__
@@ -100,6 +103,155 @@ static void rForceMult2D(
       }
     }
   }
+#ifdef __LAMBDA__
+           );
+#endif
+}
+
+
+using namespace RAJA::statement;
+
+RAJA_INDEX_VALUE(ELEM, "ELEM");
+RAJA_INDEX_VALUE(NUM_L2DQ, "NUM_QDL2D");
+RAJA_INDEX_VALUE(NUM_H1QD, "NUM_H1DNQD");
+// for the transpose variant
+RAJA_INDEX_VALUE(NUM_L2QD, "NUM_L2QD");
+RAJA_INDEX_VALUE(NUM_H1DQ, "NUM_H1DQ");
+using Pol1 = RAJA::KernelPolicy<
+          CudaKernelAsync<
+            SetShmemWindow<
+              For<1, cuda_thread_exec, Lambda<0>>
+            >,  
+            SetShmemWindow<
+              For<2, cuda_thread_exec, Lambda<1>>
+            >,  
+            For<0, cuda_threadblock_exec<64>, 
+              Lambda<2>
+            >
+          >
+      >;    
+
+// *****************************************************************************
+#ifdef __TEMPLATES__
+template<const int NUM_DIM,
+         const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int L2_DOFS_1D,
+         const int H1_DOFS_1D> kernel__
+#endif
+static void rForceMult2DNested1(
+#ifndef __TEMPLATES__
+                         const int NUM_DIM,
+                         const int NUM_DOFS_1D,
+                         const int NUM_QUAD_1D,
+                         const int L2_DOFS_1D,
+                         const int H1_DOFS_1D,
+#endif
+                         const int numElements,
+                         const double* restrict L2DofToQuad,
+                         const double* restrict H1QuadToDof,
+                         const double* restrict H1QuadToDofD,
+                         const double* restrict stressJinvT,
+                         const double* restrict e,
+                         double* restrict v) {
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  
+  auto segments = camp::make_tuple(
+    TypedRangeSegment<ELEM>(0,numElements),
+    TypedRangeSegment<NUM_L2DQ>(0,NUM_QUAD_1D * L2_DOFS_1D),
+    TypedRangeSegment<NUM_H1QD>(0,H1_DOFS_1D * NUM_QUAD_1D)
+  );
+
+  using shmemL2DofToQuad_t = ShmemTile<cuda_shmem, double,ArgList<1>,SizeList<NUM_QUAD_1D * L2_DOFS_1D>, decltype(segments)>;
+  using shmemH1QuadToDof_t = ShmemTile<cuda_shmem, double,ArgList<2>,SizeList<H1_DOFS_1D * NUM_QUAD_1D>, decltype(segments)>;
+  shmemL2DofToQuad_t shmL2DofToQuad; 
+  shmemH1QuadToDof_t shmH1QuadToDof;
+  shmemH1QuadToDof_t shmH1QuadToDofD;
+
+  kernel_param<Pol1>(
+
+    segments, 
+
+    RAJA::make_tuple(
+      shmL2DofToQuad,
+      shmH1QuadToDof,
+      shmH1QuadToDofD,
+      0.0), 
+
+    [=] __device__(ELEM el, NUM_L2DQ dq, NUM_H1QD qd,shmemL2DofToQuad_t shmL2DofToQuad ,shmemH1QuadToDof_t shmH1QuadToDof ,shmemH1QuadToDof_t shmH1QuadToDofD  ,  double &)
+    {
+      shmL2DofToQuad(dq) = L2DofToQuad[(int)*dq];
+    },
+
+
+    [=] __device__(ELEM el, NUM_L2DQ dq, NUM_H1QD qd,shmemL2DofToQuad_t shmL2DofToQuad ,shmemH1QuadToDof_t shmH1QuadToDof ,shmemH1QuadToDof_t shmH1QuadToDofD  ,  double &)
+    {
+      shmH1QuadToDof(qd) = H1QuadToDof[(int)*qd];
+      shmH1QuadToDofD(qd) = H1QuadToDofD[(int)*qd];
+    },
+
+
+    [=] __device__(ELEM el, NUM_L2DQ dq, NUM_H1QD qd,shmemL2DofToQuad_t shmL2DofToQuad ,shmemH1QuadToDof_t shmH1QuadToDof ,shmemH1QuadToDof_t shmH1QuadToDofD  ,  double &)
+    {
+      double e_xy[NUM_QUAD_2D];
+      for (int i = 0; i < NUM_QUAD_2D; ++i) {
+        e_xy[i] = 0;
+      }
+      for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+        double e_x[NUM_QUAD_1D];
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          e_x[qy] = 0;
+        }
+        for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+          const double r_e = e[ijkN(dx,dy,(int)*el,L2_DOFS_1D)];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            //e_x[qx] += L2DofToQuad[ijN(qx,dx,NUM_QUAD_1D)] * r_e;
+            e_x[qx] += shmL2DofToQuad(convertIndex<NUM_L2DQ,int>(ijN(qx,dx,NUM_QUAD_1D))) * r_e;
+          }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          //const double wy = L2DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+          const double wy = shmL2DofToQuad(convertIndex<NUM_L2DQ,int>(ijN(qy,dy,NUM_QUAD_1D)));
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            e_xy[ijN(qx,qy,NUM_QUAD_1D)] += wy * e_x[qx];
+          }
+        }
+      }
+      for (int c = 0; c < 2; ++c) {
+        for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+          for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+            v[_ijklNM(c,dx,dy,(int)*el,NUM_DOFS_1D,numElements)] = 0.0;
+          }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          double Dxy[H1_DOFS_1D];
+          double xy[H1_DOFS_1D];
+          for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+            Dxy[dx] = 0.0;
+            xy[dx]  = 0.0;
+          }
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            const double esx = e_xy[ijN(qx,qy,NUM_QUAD_1D)] * stressJinvT[ijklmNM(0,c,qx,qy,(int)*el,NUM_DIM,NUM_QUAD_1D)];
+            const double esy = e_xy[ijN(qx,qy,NUM_QUAD_1D)] * stressJinvT[ijklmNM(1,c,qx,qy,(int)*el,NUM_DIM,NUM_QUAD_1D)];
+            for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+              //Dxy[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1_DOFS_1D)];
+              //xy[dx]  += esy * H1QuadToDof[ijN(dx,qx,H1_DOFS_1D)];
+              Dxy[dx] += esx * shmH1QuadToDofD(convertIndex<NUM_H1QD,int>(ijN(dx,qx,H1_DOFS_1D)));
+              xy[dx]  += esy * shmH1QuadToDof(convertIndex<NUM_H1QD,int>(ijN(dx,qx,H1_DOFS_1D)));
+            }
+          }
+          for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+            //const double wy  = H1QuadToDof[ijN(dy,qy,H1_DOFS_1D)];
+            //const double wDy = H1QuadToDofD[ijN(dy,qy,H1_DOFS_1D)];
+            const double wy  = shmH1QuadToDof(convertIndex<NUM_H1QD,int>(ijN(dy,qy,H1_DOFS_1D)));
+            const double wDy = shmH1QuadToDofD(convertIndex<NUM_H1QD,int>(ijN(dy,qy,H1_DOFS_1D)));
+            for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+              v[_ijklNM(c,dx,dy,(int)*el,NUM_DOFS_1D,numElements)] += wy* Dxy[dx] + wDy*xy[dx];
+            }
+          }
+        }
+      }
+    }
 #ifdef __LAMBDA__
            );
 #endif
@@ -197,6 +349,144 @@ static void rForceMultTranspose2D(
         const double w = L2QuadToDof[ijN(dy,qy,L2_DOFS_1D)];
         for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
           e[ijkN(dx,dy,el,L2_DOFS_1D)] += e_x[dx] * w;
+        }
+      }
+    }
+  }
+#ifdef __LAMBDA__
+         );
+#endif
+}
+
+#ifdef __TEMPLATES__
+template<const int NUM_DIM,
+         const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int L2_DOFS_1D,
+         const int H1_DOFS_1D> kernel__
+#endif
+static void rForceMultTranspose2DNested1(
+#ifndef __TEMPLATES__
+                                  const int NUM_DIM,
+                                  const int NUM_DOFS_1D,
+                                  const int NUM_QUAD_1D,
+                                  const int L2_DOFS_1D,
+                                  const int H1_DOFS_1D,
+#endif
+                                  const int numElements,
+                                  const double* restrict L2QuadToDof,
+                                  const double* restrict H1DofToQuad,
+                                  const double* restrict H1DofToQuadD,
+                                  const double* restrict stressJinvT,
+                                  const double* restrict v,
+                                  double* restrict e) {
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  
+  auto segments = camp::make_tuple(
+    TypedRangeSegment<ELEM>(0,numElements),
+    TypedRangeSegment<NUM_L2QD>(0,NUM_QUAD_1D * L2_DOFS_1D),
+    TypedRangeSegment<NUM_H1DQ>(0,H1_DOFS_1D * NUM_QUAD_1D)
+  );
+
+  using shmemL2QuadToDof_t = ShmemTile<cuda_shmem, double,ArgList<1>,SizeList<NUM_QUAD_1D * L2_DOFS_1D>, decltype(segments)>;
+  using shmemH1DofToQuad_t = ShmemTile<cuda_shmem, double,ArgList<2>,SizeList<H1_DOFS_1D * NUM_QUAD_1D>, decltype(segments)>;
+  shmemL2QuadToDof_t shmL2QuadToDof; 
+  shmemH1DofToQuad_t shmH1DofToQuad;
+  shmemH1DofToQuad_t shmH1DofToQuadD;
+
+  kernel_param<Pol1>(
+
+    segments, 
+
+    RAJA::make_tuple(
+      shmL2QuadToDof,
+      shmH1DofToQuad,
+      shmH1DofToQuadD,
+      0.0), 
+
+    [=] __device__(ELEM el, NUM_L2QD qd, NUM_H1DQ dq,shmemL2QuadToDof_t shmL2QuadToDof ,shmemH1DofToQuad_t shmH1DofToQuad ,shmemH1DofToQuad_t shmH1DofToQuadD  ,  double &)
+    {
+      shmL2QuadToDof(qd) = L2QuadToDof[(int)*qd];
+    },
+
+
+    [=] __device__(ELEM el, NUM_L2QD qd, NUM_H1DQ dq,shmemL2QuadToDof_t shmL2QuadToDof ,shmemH1DofToQuad_t shmH1DofToQuad ,shmemH1DofToQuad_t shmH1DofToQuadD  ,  double &)
+    {
+      shmH1DofToQuad(dq) = H1DofToQuad[(int)*dq];
+      shmH1DofToQuadD(dq) = H1DofToQuadD[(int)*dq];
+    },
+
+
+    [=] __device__(ELEM el, NUM_L2QD qd, NUM_H1DQ dq,shmemL2QuadToDof_t shmL2QuadToDof ,shmemH1DofToQuad_t shmH1DofToQuad ,shmemH1DofToQuad_t shmH1DofToQuadD  ,  double &)
+  {
+    double vStress[NUM_QUAD_2D];
+    for (int i = 0; i < NUM_QUAD_2D; ++i) {
+      vStress[i] = 0;
+    }
+    for (int c = 0; c < NUM_DIM; ++c) {
+      double v_Dxy[NUM_QUAD_2D];
+      double v_xDy[NUM_QUAD_2D];
+      for (int i = 0; i < NUM_QUAD_2D; ++i) {
+        v_Dxy[i] = v_xDy[i] = 0;
+      }
+      for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+        double v_x[NUM_QUAD_1D];
+        double v_Dx[NUM_QUAD_1D];
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          v_x[qx] = v_Dx[qx] = 0;
+        }
+
+        for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+          const double r_v = v[_ijklNM(c,dx,dy,(int)*el,NUM_DOFS_1D,numElements)];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            //v_x[qx]  += r_v * H1DofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
+            //v_Dx[qx] += r_v * H1DofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
+            v_x[qx]  += r_v * shmH1DofToQuad(convertIndex<NUM_H1DQ,int>(ijN(qx,dx,NUM_QUAD_1D)));
+            v_Dx[qx] += r_v * shmH1DofToQuadD(convertIndex<NUM_H1DQ,int>(ijN(qx,dx,NUM_QUAD_1D)));
+
+          }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          //const double wy  = H1DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+          //const double wDy = H1DofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
+          const double wy  = shmH1DofToQuad(convertIndex<NUM_H1DQ,int>(ijN(qy,dy,NUM_QUAD_1D)));
+          const double wDy = shmH1DofToQuadD(convertIndex<NUM_H1DQ,int>(ijN(qy,dy,NUM_QUAD_1D)));
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] += v_Dx[qx] * wy;
+            v_xDy[ijN(qx,qy,NUM_QUAD_1D)] += v_x[qx]  * wDy;
+          }
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          vStress[ijN(qx,qy,NUM_QUAD_1D)] +=
+            ((v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] * stressJinvT[ijklmNM(0,c,qx,qy,(int)*el,NUM_DIM,NUM_QUAD_1D)]) +
+             (v_xDy[ijN(qx,qy,NUM_QUAD_1D)] * stressJinvT[ijklmNM(1,c,qx,qy,(int)*el,NUM_DIM,NUM_QUAD_1D)]));
+        }
+      }
+    }
+    for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+      for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+        e[ijkN(dx,dy,(int)*el,L2_DOFS_1D)] = 0;
+      }
+    }
+    for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+      double e_x[L2_DOFS_1D];
+      for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+        e_x[dx] = 0;
+      }
+      for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+        const double r_v = vStress[ijN(qx,qy,NUM_QUAD_1D)];
+        for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+          //e_x[dx] += r_v * L2QuadToDof[ijN(dx,qx,L2_DOFS_1D)];
+          e_x[dx] += r_v * shmL2QuadToDof(convertIndex<NUM_L2QD ,int>(ijN(dx,qx,L2_DOFS_1D)));
+        }
+      }
+      for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+        //const double w = L2QuadToDof[ijN(dy,qy,L2_DOFS_1D)];
+        const double w = shmL2QuadToDof(convertIndex<NUM_L2QD ,int>(ijN(dy,qy,L2_DOFS_1D)));
+        for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+          e[ijkN(dx,dy,(int)*el,L2_DOFS_1D)] += e_x[dx] * w;
         }
       }
     }
@@ -498,22 +788,22 @@ void rForceMult(const int NUM_DIM,
   assert(LOG2(NUM_DIM)<=4);
   assert(LOG2(NUM_DOFS_1D-2)<=4);
   static std::unordered_map<unsigned long long, fForceMult> call = {
-    {0x20,&rForceMult2D<2,2,2,1,2>},
-    {0x21,&rForceMult2D<2,3,4,2,3>},
-    {0x22,&rForceMult2D<2,4,6,3,4>},
-    {0x23,&rForceMult2D<2,5,8,4,5>},
-    {0x24,&rForceMult2D<2,6,10,5,6>},
-    {0x25,&rForceMult2D<2,7,12,6,7>},
-    {0x26,&rForceMult2D<2,8,14,7,8>},
-    {0x27,&rForceMult2D<2,9,16,8,9>},
-    {0x28,&rForceMult2D<2,10,18,9,10>},
-    {0x29,&rForceMult2D<2,11,20,10,11>},
-    {0x2A,&rForceMult2D<2,12,22,11,12>},
-    {0x2B,&rForceMult2D<2,13,24,12,13>},
-    {0x2C,&rForceMult2D<2,14,26,13,14>},
-    {0x2D,&rForceMult2D<2,15,28,14,15>},
-    {0x2E,&rForceMult2D<2,16,30,15,16>},
-    {0x2F,&rForceMult2D<2,17,32,16,17>},
+    {0x20,&rForceMult2DNested1<2,2,2,1,2>},
+    {0x21,&rForceMult2DNested1<2,3,4,2,3>},
+    {0x22,&rForceMult2DNested1<2,4,6,3,4>},
+    {0x23,&rForceMult2DNested1<2,5,8,4,5>},
+    {0x24,&rForceMult2DNested1<2,6,10,5,6>},
+    {0x25,&rForceMult2DNested1<2,7,12,6,7>},
+    {0x26,&rForceMult2DNested1<2,8,14,7,8>},
+    {0x27,&rForceMult2DNested1<2,9,16,8,9>},
+    {0x28,&rForceMult2DNested1<2,10,18,9,10>},
+    {0x29,&rForceMult2DNested1<2,11,20,10,11>},
+    {0x2A,&rForceMult2DNested1<2,12,22,11,12>},
+    {0x2B,&rForceMult2DNested1<2,13,24,12,13>},
+    {0x2C,&rForceMult2DNested1<2,14,26,13,14>},
+    {0x2D,&rForceMult2DNested1<2,15,28,14,15>},
+    {0x2E,&rForceMult2DNested1<2,16,30,15,16>},
+    {0x2F,&rForceMult2DNested1<2,17,32,16,17>},
     // 3D
     {0x30,&rForceMult3D<3,2,2,1,2>},
     {0x31,&rForceMult3D<3,3,4,2,3>},
@@ -589,22 +879,22 @@ void rForceMultTranspose(const int NUM_DIM,
   const unsigned int id = ((NUM_DIM)<<4)|(NUM_DOFS_1D-2);
   static std::unordered_map<unsigned long long, fForceMultTranspose> call = {
     // 2D
-    {0x20,&rForceMultTranspose2D<2,2,2,1,2>},
-    {0x21,&rForceMultTranspose2D<2,3,4,2,3>},
-    {0x22,&rForceMultTranspose2D<2,4,6,3,4>},
-    {0x23,&rForceMultTranspose2D<2,5,8,4,5>},
-    {0x24,&rForceMultTranspose2D<2,6,10,5,6>},
-    {0x25,&rForceMultTranspose2D<2,7,12,6,7>},
-    {0x26,&rForceMultTranspose2D<2,8,14,7,8>},
-    {0x27,&rForceMultTranspose2D<2,9,16,8,9>},
-    {0x28,&rForceMultTranspose2D<2,10,18,9,10>},
-    {0x29,&rForceMultTranspose2D<2,11,20,10,11>},
-    {0x2A,&rForceMultTranspose2D<2,12,22,11,12>},
-    {0x2B,&rForceMultTranspose2D<2,13,24,12,13>},
-    {0x2C,&rForceMultTranspose2D<2,14,26,13,14>},
-    {0x2D,&rForceMultTranspose2D<2,15,28,14,15>},
-    {0x2E,&rForceMultTranspose2D<2,16,30,15,16>},
-    {0x2F,&rForceMultTranspose2D<2,17,32,16,17>},
+    {0x20,&rForceMultTranspose2DNested1<2,2,2,1,2>},
+    {0x21,&rForceMultTranspose2DNested1<2,3,4,2,3>},
+    {0x22,&rForceMultTranspose2DNested1<2,4,6,3,4>},
+    {0x23,&rForceMultTranspose2DNested1<2,5,8,4,5>},
+    {0x24,&rForceMultTranspose2DNested1<2,6,10,5,6>},
+    {0x25,&rForceMultTranspose2DNested1<2,7,12,6,7>},
+    {0x26,&rForceMultTranspose2DNested1<2,8,14,7,8>},
+    {0x27,&rForceMultTranspose2DNested1<2,9,16,8,9>},
+    {0x28,&rForceMultTranspose2DNested1<2,10,18,9,10>},
+    {0x29,&rForceMultTranspose2DNested1<2,11,20,10,11>},
+    {0x2A,&rForceMultTranspose2DNested1<2,12,22,11,12>},
+    {0x2B,&rForceMultTranspose2DNested1<2,13,24,12,13>},
+    {0x2C,&rForceMultTranspose2DNested1<2,14,26,13,14>},
+    {0x2D,&rForceMultTranspose2DNested1<2,15,28,14,15>},
+    {0x2E,&rForceMultTranspose2DNested1<2,16,30,15,16>},
+    {0x2F,&rForceMultTranspose2DNested1<2,17,32,16,17>},
     // 3D
     {0x30,&rForceMultTranspose3D<3,2,2,1,2>},
     {0x31,&rForceMultTranspose3D<3,3,4,2,3>},
