@@ -635,6 +635,178 @@ template<const int NUM_DIM,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D> kernel__
 #endif
+void rForceMult3DNested1(
+#ifndef __TEMPLATES__
+                  const int NUM_DIM,
+                  const int NUM_DOFS_1D,
+                  const int NUM_QUAD_1D,
+                  const int L2_DOFS_1D,
+                  const int H1_DOFS_1D,
+#endif
+                  const int numElements,
+                  const double* restrict L2DofToQuad,
+                  const double* restrict H1QuadToDof,
+                  const double* restrict H1QuadToDofD,
+                  const double* restrict stressJinvT,
+                  const double* restrict e,
+                  double* restrict v) {
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
+  
+  auto segments = camp::make_tuple(
+    TypedRangeSegment<ELEM>(0,numElements),
+    TypedRangeSegment<NUM_L2DQ>(0,NUM_QUAD_1D * L2_DOFS_1D),
+    TypedRangeSegment<NUM_H1QD>(0,H1_DOFS_1D * NUM_QUAD_1D)
+  );
+
+  using shmemL2DofToQuad_t = ShmemTile<cuda_shmem, double,ArgList<1>,SizeList<NUM_QUAD_1D * L2_DOFS_1D>, decltype(segments)>;
+  using shmemH1QuadToDof_t = ShmemTile<cuda_shmem, double,ArgList<2>,SizeList<H1_DOFS_1D * NUM_QUAD_1D>, decltype(segments)>;
+  shmemL2DofToQuad_t shmL2DofToQuad; 
+  shmemH1QuadToDof_t shmH1QuadToDof;
+  shmemH1QuadToDof_t shmH1QuadToDofD;
+
+  kernel_param<Pol1>(
+
+    segments, 
+
+    RAJA::make_tuple(
+      shmL2DofToQuad,
+      shmH1QuadToDof,
+      shmH1QuadToDofD,
+      0.0), 
+
+    [=] __device__(ELEM el, NUM_L2DQ dq, NUM_H1QD qd,shmemL2DofToQuad_t shmL2DofToQuad ,shmemH1QuadToDof_t shmH1QuadToDof ,shmemH1QuadToDof_t shmH1QuadToDofD  ,  double &)
+    {
+      shmL2DofToQuad(dq) = L2DofToQuad[(int)*dq];
+    },
+
+
+    [=] __device__(ELEM el, NUM_L2DQ dq, NUM_H1QD qd,shmemL2DofToQuad_t shmL2DofToQuad ,shmemH1QuadToDof_t shmH1QuadToDof ,shmemH1QuadToDof_t shmH1QuadToDofD  ,  double &)
+    {
+      shmH1QuadToDof(qd) = H1QuadToDof[(int)*qd];
+      shmH1QuadToDofD(qd) = H1QuadToDofD[(int)*qd];
+    },
+
+
+    [=] __device__(ELEM el, NUM_L2DQ dq, NUM_H1QD qd,shmemL2DofToQuad_t shmL2DofToQuad ,shmemH1QuadToDof_t shmH1QuadToDof ,shmemH1QuadToDof_t shmH1QuadToDofD  ,  double &)
+  {
+    double e_xyz[NUM_QUAD_3D];
+    for (int i = 0; i < NUM_QUAD_3D; ++i) {
+      e_xyz[i] = 0;
+    }
+    for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
+      double e_xy[NUM_QUAD_2D];
+      for (int i = 0; i < NUM_QUAD_2D; ++i) {
+        e_xy[i] = 0;
+      }
+      for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+        double e_x[NUM_QUAD_1D];
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          e_x[qy] = 0;
+        }
+        for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+          const double r_e = e[ijklN(dx,dy,dz,(int)*el,L2_DOFS_1D)];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            //e_x[qx] += L2DofToQuad[ijN(qx,dx,NUM_QUAD_1D)] * r_e;
+            e_x[qx] += shmL2DofToQuad(convertIndex<NUM_L2DQ,int>(ijN(qx,dx,NUM_QUAD_1D))) * r_e;
+          }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          //const double wy = L2DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+          const double wy = shmL2DofToQuad(convertIndex<NUM_L2DQ,int>(ijN(qy,dy,NUM_QUAD_1D)));
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            e_xy[ijN(qx,qy,NUM_QUAD_1D)] += wy * e_x[qx];
+          }
+        }
+      }
+      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+        //const double wz = L2DofToQuad[ijN(qz,dz,NUM_QUAD_1D)];
+        const double wz = shmL2DofToQuad(convertIndex<NUM_L2DQ,int>(ijN(qz,dz,NUM_QUAD_1D)));
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            e_xyz[ijkN(qx,qy,qz,NUM_QUAD_1D)] += wz * e_xy[ijN(qx,qy,NUM_QUAD_1D)];
+          }
+        }
+      }
+    }
+    for (int c = 0; c < 3; ++c) {
+      for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
+        for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+          for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+            v[_ijklmNM(c,dx,dy,dz,(int)*el,NUM_DOFS_1D,numElements)] = 0;
+          }
+        }
+      }
+      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+        double Dxy_x[H1_DOFS_1D * H1_DOFS_1D];
+        double xDy_y[H1_DOFS_1D * H1_DOFS_1D];
+        double xy_z[H1_DOFS_1D * H1_DOFS_1D] ;
+        for (int d = 0; d < (H1_DOFS_1D * H1_DOFS_1D); ++d) {
+          Dxy_x[d] = xDy_y[d] = xy_z[d] = 0;
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          double Dx_x[H1_DOFS_1D];
+          double x_y[H1_DOFS_1D];
+          double x_z[H1_DOFS_1D];
+          for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+            Dx_x[dx] = x_y[dx] = x_z[dx] = 0;
+          }
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            const double r_e = e_xyz[ijkN(qx,qy,qz,NUM_QUAD_1D)];
+            const double esx = r_e * stressJinvT[ijklmnNM(0,c,qx,qy,qz,(int)*el,NUM_DIM,NUM_QUAD_1D)];
+            const double esy = r_e * stressJinvT[ijklmnNM(1,c,qx,qy,qz,(int)*el,NUM_DIM,NUM_QUAD_1D)];
+            const double esz = r_e * stressJinvT[ijklmnNM(2,c,qx,qy,qz,(int)*el,NUM_DIM,NUM_QUAD_1D)];
+            for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+              //Dx_x[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1_DOFS_1D)];
+              //x_y[dx]  += esy * H1QuadToDof[ijN(dx,qx,H1_DOFS_1D)];
+              //x_z[dx]  += esz * H1QuadToDof[ijN(dx,qx,H1_DOFS_1D)];
+              Dx_x[dx] += esx * shmH1QuadToDofD(convertIndex<NUM_H1QD,int>(ijN(dx,qx,H1_DOFS_1D)));
+              x_y[dx] += esy * shmH1QuadToDof(convertIndex<NUM_H1QD,int>(ijN(dx,qx,H1_DOFS_1D)));
+              x_z[dx] += esz * shmH1QuadToDof(convertIndex<NUM_H1QD,int>(ijN(dx,qx,H1_DOFS_1D)));
+            }
+          }
+          for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+            //const double wy  = H1QuadToDof[ijN(dy,qy,H1_DOFS_1D)];
+            //const double wDy = H1QuadToDofD[ijN(dy,qy,H1_DOFS_1D)];
+            const double wy  = shmH1QuadToDof(convertIndex<NUM_H1QD,int>(ijN(dy,qy,H1_DOFS_1D)));
+            const double wDy = shmH1QuadToDofD(convertIndex<NUM_H1QD,int>(ijN(dy,qy,H1_DOFS_1D)));
+            for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+              Dxy_x[ijN(dx,dy,H1_DOFS_1D)] += Dx_x[dx] * wy;
+              xDy_y[ijN(dx,dy,H1_DOFS_1D)] += x_y[dx]  * wDy;
+              xy_z[ijN(dx,dy,H1_DOFS_1D)]  += x_z[dx]  * wy;
+            }
+          }
+        }
+        for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
+          //const double wz  = H1QuadToDof[ijN(dz,qz,H1_DOFS_1D)];
+          //const double wDz = H1QuadToDofD[ijN(dz,qz,H1_DOFS_1D)];
+          const double wz  = shmH1QuadToDof(convertIndex<NUM_H1QD,int>(ijN(dz,qz,H1_DOFS_1D)));
+          const double wDz = shmH1QuadToDofD(convertIndex<NUM_H1QD,int>(ijN(dz,qz,H1_DOFS_1D)));
+          for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+            for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+              v[_ijklmNM(c,dx,dy,dz,(int)*el,NUM_DOFS_1D,numElements)] +=
+                ((Dxy_x[ijN(dx,dy,H1_DOFS_1D)] * wz) +
+                 (xDy_y[ijN(dx,dy,H1_DOFS_1D)] * wz) +
+                 (xy_z[ijN(dx,dy,H1_DOFS_1D)]  * wDz));
+            }
+          }
+        }
+      }
+    }
+  }
+#ifdef __LAMBDA__
+         );
+#endif
+}
+
+// *****************************************************************************
+#ifdef __TEMPLATES__
+template<const int NUM_DIM,
+         const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int L2_DOFS_1D,
+         const int H1_DOFS_1D> kernel__
+#endif
 static void rForceMultTranspose3D(
 #ifndef __TEMPLATES__
                                   const int NUM_DIM,
@@ -807,7 +979,7 @@ void rForceMult(const int NUM_DIM,
     // 3D
     {0x30,&rForceMult3D<3,2,2,1,2>},
     {0x31,&rForceMult3D<3,3,4,2,3>},
-    {0x32,&rForceMult3D<3,4,6,3,4>},
+    {0x32,&rForceMult3DNested1<3,4,6,3,4>},
     {0x33,&rForceMult3D<3,5,8,4,5>},
     {0x34,&rForceMult3D<3,6,10,5,6>},
     {0x35,&rForceMult3D<3,7,12,6,7>},
@@ -822,10 +994,10 @@ void rForceMult(const int NUM_DIM,
     {0x3E,&rForceMult3D<3,16,30,15,16>},
     {0x3F,&rForceMult3D<3,17,32,16,17>},
   };
-  if (!call[id]){
+ // if (!call[id]){
     printf("\n[rForceMult] id \033[33m0x%X\033[m ",id);
     fflush(stdout);
-  }
+ // }
   assert(call[id]);
   call0(rForceMult,id,grid,blck,
         nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
