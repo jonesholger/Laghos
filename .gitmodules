@@ -11,4 +11,9 @@
   branch = feature/mfem_submodule
 [submodule "tpl/caliper"]
 	path = tpl/caliper
-	url = git@github.com:LLNL/Caliper
+  url = git@github.com:LLNL/Caliper
+[submodule "tpl/umpire"]
+  path = tpl/umpire
+  url = git@github.com/LLNL/Umpire
+  branch = master
+
