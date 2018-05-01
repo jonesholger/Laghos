@@ -18,7 +18,8 @@ function create_branch() {
 git submodule foreach -q --recursive \
     'branch="$(git config -f $toplevel/.gitmodules submodule.$name.branch)"; \
      [ "$branch" = "" ] && \
-     git checkout master || git checkout $branch' 
+     git checkout master || git checkout $branch && \
+     git submodule update --init' 
 }
 
 if "is_git_dir"; then
@@ -28,7 +29,7 @@ else
   mkdir -p "Laghos-submodules-fresh"
   cd "Laghos-submodules-fresh"
   pwd
-  git clone git@github.com:jonesholger/Laghos.git --branch feature/raja_kernel --recursive
+  git clone git@github.com:jonesholger/Laghos.git --branch feature/blueos --recursive
   cd "Laghos"
   create_branch
 fi;  
