@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-options=( 'pa' 'fa' )
+options=( 'pa' )
 
-problem=0
+problem=1
 parallel_refs=0
 maxL2dof=8000000
 nproc=4
 
-outfile=rzmanta_timings_2d_cuda
+outfile=rzmanta_timings_set3_2d_cuda
 mesh_file=../../data/square01_quad.mesh
 
 calc() { awk "BEGIN{print $*}"; }
@@ -28,14 +28,15 @@ BEGIN { ref= 0 }
 /Forces rate/ { forces_rate = $8 }
 /UpdateQuadData rate/ { update_quad_rate = $8 }
 /Major kernels total time/ { total_time = $6 }
-END { printf("%d %d %d %d %.8f %.8f %.8f %.8f %.8f\n", order, ref, h1_dofs, l2_dofs, h1_cg_rate, l2_cg_rate, forces_rate, update_quad_rate, total_time) }'
+/tsteps/ { total_steps = $2 }
+END { printf("%d %d %d %d %.8f %.8f %.8f %.8f %.8f %d\n", order, ref, h1_dofs, l2_dofs, h1_cg_rate, l2_cg_rate, forces_rate, update_quad_rate, total_time, total_steps) }'
 }
 
 [ -r $outfile ] && cp $outfile $outfile.bak
-echo "# H1order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[0]}
-echo "# H1order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[1]}
+echo "# H1order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time total_steps" > $outfile"_"${options[0]}
+#echo "# H1order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time total_steps" > $outfile"_"${options[1]}
 for method in "${options[@]}"; do
-  for torder in {1..4}; do
+  for torder in {2..8}; do
     for sref in {0..12}; do
        nzones=$(( 4**(sref+1) ))
        nL2dof=$(( nzones*(torder+1)**2 ))

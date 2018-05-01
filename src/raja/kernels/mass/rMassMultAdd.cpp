@@ -546,6 +546,7 @@ void rMassMultAdd3D(
 #endif
 }
 
+
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel__
 void rMassMultAdd3DNested2(

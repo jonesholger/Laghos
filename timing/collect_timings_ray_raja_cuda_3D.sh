@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-options=( 'pa' 'fa' )
+options=( 'pa' )
 
-problem=0
+problem=1
 parallel_refs=0
 maxL2dof=8000000
 nproc=4
@@ -35,13 +35,13 @@ END { printf("%d %d %d %d %.8f %.8f %.8f %.8f %.8f\n", order, ref, h1_dofs, l2_d
 echo "# H1order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[0]}
 echo "# H1order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[1]}
 for method in "${options[@]}"; do
-  for torder in {1..3}; do
+  for torder in {1..4}; do
     for sref in {0..12}; do
        nzones=$(( 8**(sref+1) ))
        nL2dof=$(( nzones*(torder+1)**3 ))
        if (( nproc <= nzones )) && (( nL2dof < maxL2dof )) ; then
          echo "np"$nproc "Q"$((torder+1))"Q"$torder $sref"ref" $method
-         echo  $(calc mpirun -np $nproc mpibind ./laghos.exe -$method \
+         echo  $(run_case mpirun -np $nproc mpibind ./laghos.exe -$method \
                        -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
                        --cg-tol 0 --cg-max-steps 50 \
                        --max-steps 1 \
