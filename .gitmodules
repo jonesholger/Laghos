@@ -14,4 +14,5 @@
   url = git@github.com:LLNL/Caliper
 [submodule "tpl/Umpire"]
 	path = tpl/Umpire
-	url = git@github.com:LLNL/Umpire
+  url = git@github.com:LLNL/Umpire
+  branch = develop
