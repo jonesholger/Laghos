@@ -28,7 +28,7 @@ else
   mkdir -p "Laghos-submodules-fresh"
   cd "Laghos-submodules-fresh"
   pwd
-  git clone git@github.com:jonesholger/Laghos.git --branch feature/raja_with_cali_submodule --recursive
+  git clone git@github.com:jonesholger/Laghos.git --branch feature/raja_kernel --recursive
   cd "Laghos"
   create_branch
 fi;  
