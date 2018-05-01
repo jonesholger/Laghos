@@ -4,7 +4,7 @@
 [submodule "tpl/RAJA"]
 	path = tpl/RAJA
   url = git@github.com:LLNL/RAJA.git
-  branch = feature/kunen1/nested2
+  branch = develop
 [submodule "MFEM"]
 	path = MFEM
   url = git@github.com:jonesholger/MFEM.git
