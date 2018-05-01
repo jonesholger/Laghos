@@ -12,7 +12,6 @@
 [submodule "tpl/caliper"]
 	path = tpl/caliper
   url = git@github.com:LLNL/Caliper
-[submodule "tpl/umpire"]
-  path = tpl/umpire
-  url = git@github.com:LLNL/Umpire
-
+[submodule "tpl/Umpire"]
+	path = tpl/Umpire
+	url = git@github.com:LLNL/Umpire
